@@ -93,12 +93,18 @@ export function applyActionToPatient(patient, actionType) {
         tone: "neutral",
         state: "historical",
       });
+      // The available telehealth Slot has now been used, so it is superseded.
+      signals = updateSignal(signals, "telehealth-avail", {
+        text: "Telehealth slot (Tuesday 2:30 PM) booked — slot used.",
+        tone: "neutral",
+        state: "historical",
+      });
       signals = addSignal(signals, {
         id: "telehealth-confirmed",
         system: "TELEHEALTH",
         source: "Telehealth Scheduling",
         fhir: "Appointment",
-        text: "Telehealth visit confirmed. Travel barrier removed.",
+        text: "Telehealth appointment scheduled for Tuesday at 2:30 PM.",
         tone: "good",
         state: "active",
       });
@@ -119,6 +125,12 @@ export function applyActionToPatient(patient, actionType) {
         recommendedAction: "none",
         summary: `Telehealth appointment scheduled for ${patient.specialty.toLowerCase()}, which removes the 74-mile travel and transportation barrier. Referral is on track.`,
         lastAction: "Telehealth offered and scheduled — access barrier resolved.",
+        riskReasons: [
+          "Telehealth appointment scheduled",
+          "Transportation barrier no longer blocks care",
+          "Referral is progressing",
+          "Next step is completion of the specialist visit",
+        ],
         journey: { ...patient.journey, appointment_scheduled: "done", access_resolved: "done" },
         timelineNotes: {
           ...patient.timelineNotes,
@@ -140,8 +152,9 @@ export function applyActionToPatient(patient, actionType) {
       });
       signals = addSignal(signals, {
         id: "auth-escalation",
-        system: "PAYER",
-        source: "Payer API",
+        system: "CAREBRIDGE",
+        source: "CareBridge / Coordinator action",
+        // No FHIR badge: this is an outbound CareBridge/coordinator action, not a payer response.
         text: "Authorization escalation sent to payer. Expedited review requested.",
         tone: "good",
         state: "active",
@@ -163,6 +176,11 @@ export function applyActionToPatient(patient, actionType) {
         recommendedAction: "none",
         lastAction: "Authorization escalation sent to payer. Barrier remains active until the payer approves.",
         summary: `Authorization escalation sent to ${patient.insurance}. The prior-authorization barrier is still active and the appointment cannot be booked until the payer approves.`,
+        riskReasons: [
+          "Prior authorization still unresolved",
+          "Escalation sent — waiting on the payer's decision",
+          "Appointment cannot be booked until authorization clears",
+        ],
         timelineNotes: {
           ...patient.timelineNotes,
           insurance_cleared: "Escalation sent — still blocked, waiting on the payer's decision.",
@@ -181,7 +199,7 @@ export function applyActionToPatient(patient, actionType) {
         state: "historical",
       });
       signals = updateSignal(signals, "alternate", {
-        text: `${alt.name} selected — appointment available in ${alt.waitDays} days.`,
+        text: `${alt.name} selected — availability in ${alt.waitDays} days. Appointment not yet booked.`,
         tone: "good",
         state: "resolved",
       });
@@ -196,28 +214,37 @@ export function applyActionToPatient(patient, actionType) {
         movedOnTrack: true,
         category: "ON_TRACK",
         blockingSystem: null,
-        status: `Alternate specialist selected (${alt.waitDays}-day wait)`,
-        appointmentStatus: `Scheduling with ${alt.name} (~${alt.waitDays} days)`,
+        status: `Alternate specialist selected (${alt.waitDays}-day availability)`,
+        // Appointment is NOT booked yet — only availability was identified.
+        appointmentStatus: `Ready to schedule with ${alt.name} (~${alt.waitDays} days)`,
         stalledDays: 0,
         recommendedAction: "none",
         currentSpecialist: { name: alt.name, waitWeeks: Math.round(alt.waitDays / 7) },
         lastAction: `Switched to alternate specialist ${alt.name} — capacity barrier resolved.`,
-        summary: `Switched to in-network alternate ${alt.name}, cutting the wait from 11 weeks to ${alt.waitDays} days. Scheduling can proceed.`,
-        journey: { ...patient.journey, appointment_scheduled: "done" },
+        summary: `Switched to in-network alternate ${alt.name}, cutting the wait from 11 weeks to ${alt.waitDays} days. Ready to schedule — appointment not yet booked.`,
+        riskReasons: [
+          "Earlier capacity barrier resolved",
+          `Alternate in-network specialist identified (${alt.name})`,
+          "Appointment still needs to be scheduled",
+        ],
+        // Specialist identified = done; appointment scheduling stays Pending (not booked).
+        journey: { ...patient.journey, specialist_identified: "done", appointment_scheduled: "pending" },
         timelineNotes: {
           ...patient.timelineNotes,
           specialist_identified: `Alternate specialist ${alt.name} selected.`,
-          appointment_scheduled: `Scheduling with ${alt.name} — about ${alt.waitDays} days out.`,
+          appointment_scheduled: `Ready to schedule with ${alt.name} · availability in ${alt.waitDays} days.`,
         },
         signals,
       };
     }
 
-    // ROBERT — patient confirmation truly resolves the engagement barrier.
+    // ROBERT — patient confirmation resolves the engagement barrier.
+    // NOTE: this is a SIMULATED successful outcome for the prototype. In production,
+    // reaching a patient and getting confirmation is not guaranteed by taking the action.
     case "contact_patient": {
       let signals = patient.signals;
       signals = updateSignal(signals, "outreach", {
-        text: "Patient reached and appointment confirmed.",
+        text: "Prototype simulation: coordinator successfully reached patient and confirmed appointment.",
         tone: "good",
         state: "resolved",
       });
@@ -236,12 +263,17 @@ export function applyActionToPatient(patient, actionType) {
         appointmentStatus: "Scheduled — confirmed",
         stalledDays: 0,
         recommendedAction: "none",
-        lastAction: "Patient contacted and appointment confirmed — engagement barrier resolved.",
-        summary: "The patient confirmed the scheduled appointment after outreach. Referral is on track.",
+        lastAction: "Prototype simulation: coordinator reached the patient and confirmed the appointment — engagement barrier resolved.",
+        summary: "Prototype simulation: the patient was reached and confirmed the scheduled appointment. Referral is on track.",
+        riskReasons: [
+          "Patient reached",
+          "Appointment confirmed",
+          "No active engagement barrier",
+        ],
         journey: { ...patient.journey, access_resolved: "done" },
         timelineNotes: {
           ...patient.timelineNotes,
-          access_resolved: "Resolved — patient reached and appointment confirmed.",
+          access_resolved: "Resolved — prototype simulation: patient reached and appointment confirmed.",
           visit_completed: "On track for the confirmed appointment.",
         },
         signals,
@@ -283,6 +315,11 @@ export function applyActionToPatient(patient, actionType) {
         awaitingExternal: "specialist_note", // enables the "simulate incoming note" demo control
         lastAction: "Specialist note requested. The loop stays open until the specialist system returns the note.",
         summary: "Requested the specialist summary. The referral loop is still open and will close once the note is received and routed to the PCP.",
+        riskReasons: [
+          "Specialist summary still not received",
+          "Note requested — awaiting the specialist system's response",
+          "Referral loop stays open until the note arrives",
+        ],
         timelineNotes: {
           ...patient.timelineNotes,
           plan_returned: "Requested — awaiting the specialist note. Loop still open.",
@@ -355,6 +392,12 @@ export function applyExternalEvent(patient, eventType) {
         recommendedAction: "none",
         lastAction: "Specialist summary received and routed to PCP — simulated external event. CareBridge confirmed the handoff and closed the loop.",
         summary: "The specialist summary was received from the Specialist EHR and routed to the PCP. The handoff is confirmed and the referral loop is closed.",
+        riskReasons: [
+          "Specialist summary received",
+          "PCP handoff completed",
+          "Referral loop closed",
+          "No active coordination barrier",
+        ],
         journey: { ...patient.journey, plan_returned: "done", referral_closed: "done" },
         timelineNotes: {
           ...patient.timelineNotes,

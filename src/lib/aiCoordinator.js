@@ -38,17 +38,29 @@ function needsAttentionAnswer(patients) {
   return [`${flagged.length} referral${flagged.length === 1 ? "" : "s"} need attention today:`, ...lines].join("\n");
 }
 
+// Describe a patient's current action state from LIVE state (not just recommendedAction),
+// so a referral with an action already in progress never reads "No intervention needed."
+function actionPhrase(p) {
+  if (p.actionTaken && !p.barrierResolved) {
+    return `${p.lastAction || "action sent"} Still ${p.workflowStatus.toLowerCase()} — continue monitoring the response.`;
+  }
+  if (p.recommendedAction && p.recommendedAction !== "none") {
+    return `Recommended: ${ACTION_LABELS[p.recommendedAction]}.`;
+  }
+  return "Continue monitoring.";
+}
+
 function topPrioritiesAnswer(patients) {
   const flagged = sortByRisk(patients.filter((p) => p.risk !== "Low")).slice(0, 3);
   if (flagged.length === 0) return "Nothing is at risk right now — all referrals are on track.";
-  const lines = flagged.map((p, i) => `${i + 1}. ${p.name} (${p.specialty}, ${p.risk}) — ${ACTION_LABELS[p.recommendedAction]}.`);
+  const lines = flagged.map((p, i) => `${i + 1}. ${p.name} (${p.specialty}, ${p.risk}, ${p.workflowStatus}) — ${actionPhrase(p)}`);
   return ["Your top priorities right now:", ...lines].join("\n");
 }
 
 function categoryAnswer(patients, categoryKey, label) {
   const matches = patients.filter((p) => p.category === categoryKey);
   if (matches.length === 0) return `No referrals are currently ${label}.`;
-  const lines = matches.map((p) => `• ${p.name} — ${p.specialty}. ${p.barrier}. Recommended: ${ACTION_LABELS[p.recommendedAction]}.`);
+  const lines = matches.map((p) => `• ${p.name} — ${p.specialty}, ${p.workflowStatus}. ${p.barrier}. ${actionPhrase(p)}`);
   return [`Referrals ${label}:`, ...lines].join("\n");
 }
 
@@ -63,6 +75,9 @@ function blockingSystemAnswer(patient) {
 }
 
 function blockingAnswer(patient) {
+  if (patient.workflowStatus === "Closed" || patient.loopClosed) {
+    return `${patient.name}'s referral is closed — nothing is blocking it. The specialist summary was received and routed to the PCP, so the loop is complete.`;
+  }
   if (patient.barrierResolved) {
     if (patient.id === "sarah-miller") {
       return `Sarah's access barrier has been resolved through a telehealth appointment. Her referral is now on track (workflow status: On track). The next step is confirming completion of the specialist visit.`;
@@ -78,8 +93,11 @@ function blockingAnswer(patient) {
 
 function nextStepAnswer(patient) {
   if (patient) {
+    if (patient.workflowStatus === "Closed" || patient.loopClosed) {
+      return `${patient.name}'s referral loop is closed. The specialist summary was received and routed to the PCP. No further referral-coordination action is required.`;
+    }
     if (patient.barrierResolved) {
-      return `${patient.name} is ${patient.workflowStatus === "Closed" ? "closed out" : "on track"}. Next step: confirm the patient completes the specialist visit, then make sure the specialist information returns to the PCP (${patient.pcp}).`;
+      return `${patient.name} is on track. Next step: confirm the patient completes the specialist visit, then make sure the specialist information returns to the PCP (${patient.pcp}).`;
     }
     if (patient.actionTaken) {
       const follow = patient.recommendedAction !== "none" ? ` Once the response arrives you can approve "${ACTION_LABELS[patient.recommendedAction]}" to close it out.` : "";

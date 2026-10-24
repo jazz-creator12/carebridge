@@ -7,7 +7,7 @@ const RISK_ORDER = { High: 0, Medium: 1, Low: 2 };
 // Dashboard category buckets, in display order.
 // EVERYTHING and URGENT are used by the summary cards; the rest also drive the chips.
 const BUCKETS = [
-  { key: "EVERYTHING", label: "All referrals", match: () => true },
+  { key: "EVERYTHING", label: "All referrals", match: (p) => p.workflowStatus !== "Closed" },
   { key: "ALL", label: "Needs attention now", match: (p) => p.risk !== "Low" },
   { key: "URGENT", label: "Urgent", match: (p) => p.risk === "High" },
   { key: "INSURANCE", label: "Blocked by insurance", match: (p) => p.category === "INSURANCE" },
@@ -62,6 +62,10 @@ export default function Dashboard({ patients, onSelectPatient }) {
 
   const high = patients.filter((p) => p.risk === "High").length;
   const atRisk = patients.filter((p) => p.risk !== "Low").length;
+  // Active = everything except Closed referrals. On track = workflow status On track
+  // (a Low-risk but Closed referral like Emily is NOT counted as On track).
+  const activeReferrals = patients.filter((p) => p.workflowStatus !== "Closed").length;
+  const onTrack = patients.filter((p) => p.workflowStatus === "On track").length;
 
   // Demo impact metrics, derived live from the mock data (not real outcomes).
   // These are deliberately DIFFERENT things:
@@ -96,7 +100,7 @@ export default function Dashboard({ patients, onSelectPatient }) {
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard
           label="Active referrals"
-          value={patients.length}
+          value={activeReferrals}
           tone="blue"
           sub="Being monitored"
           selected={filter === "EVERYTHING"}
@@ -120,7 +124,7 @@ export default function Dashboard({ patients, onSelectPatient }) {
         />
         <StatCard
           label="On track"
-          value={patients.length - atRisk}
+          value={onTrack}
           tone="green"
           sub="No action needed"
           selected={filter === "ON_TRACK"}
