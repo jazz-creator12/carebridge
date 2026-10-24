@@ -195,7 +195,8 @@ function ActionCenter({ patient, onRequestAction, onExternalEvent }) {
         <p className="mt-1 text-sm text-emerald-700">{patient.lastAction}</p>
         {!patient.loopClosed && (
           <p className="mt-2 text-sm text-emerald-700">
-            Next step: confirm the patient completes the visit, then ensure the specialist information returns to the PCP.
+            {patient.nextStepOverride ||
+              "Next step: confirm the patient completes the visit, then ensure the specialist information returns to the PCP."}
           </p>
         )}
       </div>
@@ -295,20 +296,33 @@ export default function PatientJourney({ patient, onBack, onAskAI, onRequestActi
   const progress = Math.round((completed / JOURNEY_STEPS.length) * 100);
   const resolved = patient.barrierResolved === true;
 
-  // Contextual secondary actions. Once the specialist visit is complete, travel
-  // actions no longer apply — swap in post-visit coordination actions instead.
+  // Contextual secondary actions. These never change referral state; we only hide
+  // ones that are obviously irrelevant given the current state.
   const visitComplete = patient.journey.visit_completed === "done";
-  const secondaryActions = visitComplete
-    ? [
-        { icon: Icon.Phone, label: "Contact specialist office" },
-        { icon: Icon.Doc, label: "Update PCP" },
-        { icon: Icon.Clock, label: "View referral history" },
-      ]
-    : [
-        { icon: Icon.Phone, label: "Contact patient" },
-        { icon: Icon.Car, label: "Arrange transport" },
-        { icon: Icon.Doc, label: "Update PCP" },
-      ];
+  // Transport is irrelevant once access is resolved (telehealth booked / no travel).
+  const transportIrrelevant = patient.journey.access_resolved === "done" || patient.telehealthAvailable;
+  // "Contact patient" is done once the patient has been reached and confirmed.
+  const patientAlreadyConfirmed =
+    patient.barrierResolved && patient.category === "ON_TRACK" &&
+    (patient.appointmentStatus || "").toLowerCase().includes("confirmed");
+
+  let secondaryActions;
+  if (visitComplete) {
+    // Post-visit: travel/patient-contact no longer apply.
+    secondaryActions = [
+      { icon: Icon.Phone, label: "Contact specialist office" },
+      { icon: Icon.Doc, label: "Update PCP" },
+      { icon: Icon.Clock, label: "View referral history" },
+    ];
+  } else {
+    secondaryActions = [
+      { icon: Icon.Phone, label: "Contact patient" },
+      { icon: Icon.Car, label: "Arrange transport" },
+      { icon: Icon.Doc, label: "Update PCP" },
+    ];
+    if (transportIrrelevant) secondaryActions = secondaryActions.filter((a) => a.label !== "Arrange transport");
+    if (patientAlreadyConfirmed) secondaryActions = secondaryActions.filter((a) => a.label !== "Contact patient");
+  }
 
   return (
     <div className="animate-fade-in space-y-6">

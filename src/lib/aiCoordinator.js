@@ -139,7 +139,7 @@ export function askCoordinator(question, patients = SEED_PATIENTS) {
   if (/insurance|authorization|payer|auth\b/.test(q)) return categoryAnswer(patients, "INSURANCE", "blocked by insurance");
   if (/access|transport|distance|travel|miles/.test(q)) return categoryAnswer(patients, "ACCESS", "with access barriers");
   if (/which system|what system|blocking .* system|system.*block/.test(q) && patient) return blockingSystemAnswer(patient);
-  if (/block|stuck|why.*risk|what.*wrong|barrier|high risk/.test(q)) return blockingAnswer(patient || sarah);
+  if (/block|stuck|why.*risk|what.*wrong|barrier|high risk|on track|what changed/.test(q)) return blockingAnswer(patient || sarah);
   if (/draft|message|text|email|write.*to|reach out/.test(q)) return draftMessageAnswer(patient, patients);
   if (/summar|pcp|doctor|report/.test(q)) return pcpSummaryAnswer(patient, patients);
   if (/next|do|action|recommend|should i|what now/.test(q)) return nextStepAnswer(patient);
@@ -151,6 +151,7 @@ export function askCoordinator(question, patients = SEED_PATIENTS) {
   return "I can help coordinate referrals. Try asking:\n• Which referrals need attention today?\n• What are my top three priorities?\n• Why is Sarah high risk?\n• Which system is blocking Maria?\n• Which referrals have insurance problems?\n• Which patients have access barriers?\n• Draft a message to Sarah.\n• Summarize Emily's case for her PCP.";
 }
 
+// Static fallback (used when no live state is provided).
 export const SUGGESTED_QUESTIONS = [
   "Which referrals need attention today?",
   "What are my top three priorities?",
@@ -159,3 +160,22 @@ export const SUGGESTED_QUESTIONS = [
   "Which referrals have insurance problems?",
   "Draft a message to Sarah.",
 ];
+
+// State-aware suggested chips. Never surface a question that contradicts the
+// patient's current state (e.g. "Why is Sarah high risk?" once she is Low/On track).
+export function getSuggestedQuestions(patients = SEED_PATIENTS) {
+  const sarah = getById(patients, "sarah-miller");
+  // Default to the static list, then adjust the Sarah-specific chip.
+  const sarahChip =
+    sarah && sarah.risk !== "High"
+      ? "Why is Sarah on track now?"
+      : "Why is Sarah high risk?";
+  return [
+    "Which referrals need attention today?",
+    "What are my top three priorities?",
+    sarahChip,
+    "Which system is blocking Maria?",
+    "Which referrals have insurance problems?",
+    "Draft a message to Sarah.",
+  ];
+}

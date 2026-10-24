@@ -232,6 +232,8 @@ export default function Dashboard({ patients, onSelectPatient }) {
                 <td className="px-5 py-4">
                   {p.recommendedAction === "none" ? (
                     <span className="text-xs font-medium text-emerald-600">No intervention needed</span>
+                  ) : p.recommendedAction === "monitor_payer" ? (
+                    <span className="text-xs font-medium text-amber-600">{ACTION_LABELS[p.recommendedAction]}</span>
                   ) : (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 transition group-hover:border-brand-300 group-hover:bg-brand-100">
                       {ACTION_LABELS[p.recommendedAction]}
@@ -276,14 +278,16 @@ export default function Dashboard({ patients, onSelectPatient }) {
               <StatusPill tone="slate">{p.barrier}</StatusPill>
               {p.blockingSystem && <StatusPill tone="slate">Primary signal: {p.blockingSystem}</StatusPill>}
             </div>
-            {p.recommendedAction !== "none" && (
+            {p.recommendedAction === "monitor_payer" ? (
+              <div className="mt-2.5 text-xs font-medium text-amber-600">{ACTION_LABELS[p.recommendedAction]}</div>
+            ) : p.recommendedAction !== "none" ? (
               <div className="mt-2.5">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
                   {ACTION_LABELS[p.recommendedAction]}
                   <Icon.Chevron className="h-3 w-3" />
                 </span>
               </div>
-            )}
+            ) : null}
           </button>
         ))}
       </div>

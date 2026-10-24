@@ -173,7 +173,8 @@ export function applyActionToPatient(patient, actionType) {
         blockingSystem: "Payer API",
         status: "Authorization escalation sent — awaiting payer",
         appointmentStatus: "On hold (authorization still pending)",
-        recommendedAction: "none",
+        // Escalation already sent — the next administrative step is to monitor, NOT re-send.
+        recommendedAction: "monitor_payer",
         lastAction: "Authorization escalation sent to payer. Barrier remains active until the payer approves.",
         summary: `Authorization escalation sent to ${patient.insurance}. The prior-authorization barrier is still active and the appointment cannot be booked until the payer approves.`,
         riskReasons: [
@@ -227,13 +228,17 @@ export function applyActionToPatient(patient, actionType) {
           `Alternate in-network specialist identified (${alt.name})`,
           "Appointment still needs to be scheduled",
         ],
-        // Specialist identified = done; appointment scheduling stays Pending (not booked).
-        journey: { ...patient.journey, specialist_identified: "done", appointment_scheduled: "pending" },
+        // Specialist identified = done; capacity/access barrier resolved = done;
+        // appointment scheduling stays Pending (not booked).
+        journey: { ...patient.journey, specialist_identified: "done", access_resolved: "done", appointment_scheduled: "pending" },
         timelineNotes: {
           ...patient.timelineNotes,
           specialist_identified: `Alternate specialist ${alt.name} selected.`,
+          access_resolved: `Capacity barrier resolved — alternate in-network specialist identified with availability in ${alt.waitDays} days.`,
           appointment_scheduled: `Ready to schedule with ${alt.name} · availability in ${alt.waitDays} days.`,
         },
+        // Marks this as a resolved referral whose next step is scheduling, not visit completion.
+        nextStepOverride: `Next step: schedule the appointment with ${alt.name}, then continue monitoring through visit completion and PCP handoff.`,
         signals,
       };
     }

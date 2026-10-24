@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { askCoordinator, SUGGESTED_QUESTIONS } from "../lib/aiCoordinator.js";
+import { askCoordinator, getSuggestedQuestions } from "../lib/aiCoordinator.js";
 import { Icon } from "./ui.jsx";
 
 const GREETING = {
@@ -101,7 +101,7 @@ export default function AICoordinator({ open, onClose, pendingQuestion, onConsum
         <div className="border-t border-slate-100 px-4 pt-3">
           <div className="mb-2 text-xs font-medium text-slate-400">Try asking</div>
           <div className="flex flex-wrap gap-2 pb-3">
-            {SUGGESTED_QUESTIONS.map((q) => (
+            {getSuggestedQuestions(patients).map((q) => (
               <button
                 key={q}
                 onClick={() => send(q)}

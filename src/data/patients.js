@@ -481,5 +481,6 @@ export const ACTION_LABELS = {
   offer_alternate_specialist: "Offer alternate specialist",
   contact_patient: "Contact patient / confirm appointment",
   request_specialist_note: "Request specialist note",
+  monitor_payer: "Monitor payer response",
   none: "No intervention needed",
 };
