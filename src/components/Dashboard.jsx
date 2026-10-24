@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { RiskBadge, StatusPill, WorkflowPill, InfoTooltip, Avatar, Icon } from "./ui.jsx";
 import { ACTION_LABELS, WORKFLOW_TONE } from "../data/patients.js";
+import LiveFhirProof from "./LiveFhirProof.jsx";
 
 const RISK_ORDER = { High: 0, Medium: 1, Low: 2 };
 
@@ -291,6 +292,9 @@ export default function Dashboard({ patients, onSelectPatient }) {
           </button>
         ))}
       </div>
+
+      {/* Live interoperability proof — isolated, reads a real FHIR sandbox. */}
+      <LiveFhirProof />
     </div>
   );
 }
