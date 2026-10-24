@@ -7,7 +7,7 @@ const RISK_ORDER = { High: 0, Medium: 1, Low: 2 };
 // Dashboard category buckets, in display order.
 // EVERYTHING and URGENT are used by the summary cards; the rest also drive the chips.
 const BUCKETS = [
-  { key: "EVERYTHING", label: "All referrals", match: (p) => p.workflowStatus !== "Closed" },
+  { key: "EVERYTHING", label: "Active referrals", match: (p) => p.workflowStatus !== "Closed" },
   { key: "ALL", label: "Needs attention now", match: (p) => p.risk !== "Low" },
   { key: "URGENT", label: "Urgent", match: (p) => p.risk === "High" },
   { key: "INSURANCE", label: "Blocked by insurance", match: (p) => p.category === "INSURANCE" },
@@ -142,7 +142,7 @@ export default function Dashboard({ patients, onSelectPatient }) {
           </span>
         </div>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-7">
-          <Metric value={patients.length} label="Active referrals" />
+          <Metric value={activeReferrals} label="Active referrals" />
           <Metric value={atRisk} label="At-risk referrals" tone="text-red-600" />
           <Metric value={actionsTaken} label="Actions taken" tone="text-brand-600" />
           <Metric value={barriersResolved} label="Barriers resolved" tone="text-emerald-600" />
