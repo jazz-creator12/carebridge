@@ -11,7 +11,7 @@
 // step actually happens across the different systems.
 export const JOURNEY_STEPS = [
   { key: "referral_placed", label: "Referral placed" },
-  { key: "insurance_cleared", label: "Insurance cleared" },
+  { key: "insurance_cleared", label: "Insurance / authorization" },
   { key: "specialist_identified", label: "Specialist identified" },
   { key: "appointment_scheduled", label: "Appointment scheduled" },
   { key: "access_resolved", label: "Access barrier resolved" },

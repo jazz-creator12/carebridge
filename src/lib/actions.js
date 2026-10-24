@@ -184,7 +184,7 @@ export function applyActionToPatient(patient, actionType) {
         ],
         timelineNotes: {
           ...patient.timelineNotes,
-          insurance_cleared: "Escalation sent — still blocked, waiting on the payer's decision.",
+          insurance_cleared: "Prior authorization pending — escalation sent; waiting on payer decision.",
         },
         signals,
       };

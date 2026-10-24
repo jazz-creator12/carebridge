@@ -296,6 +296,14 @@ export default function PatientJourney({ patient, onBack, onAskAI, onRequestActi
   const progress = Math.round((completed / JOURNEY_STEPS.length) * 100);
   const resolved = patient.barrierResolved === true;
 
+  // DISPLAY-ONLY ordering for the vertical journey: show Completed (done) steps
+  // first in their canonical order, then the remaining (blocked/pending) steps in
+  // canonical order. This prevents a later Completed step from appearing below an
+  // earlier unresolved prerequisite. It reads patient.journey but never changes it.
+  const doneSteps = JOURNEY_STEPS.filter((s) => patient.journey[s.key] === "done");
+  const otherSteps = JOURNEY_STEPS.filter((s) => patient.journey[s.key] !== "done");
+  const orderedSteps = [...doneSteps, ...otherSteps];
+
   // Contextual secondary actions. These never change referral state; we only hide
   // ones that are obviously irrelevant given the current state.
   const visitComplete = patient.journey.visit_completed === "done";
@@ -425,10 +433,10 @@ export default function PatientJourney({ patient, onBack, onAskAI, onRequestActi
           </div>
 
           <ol className="relative">
-            {JOURNEY_STEPS.map((step, i) => {
+            {orderedSteps.map((step, i) => {
               const state = patient.journey[step.key] || "pending";
               const styles = STATE_STYLES[state];
-              const isLast = i === JOURNEY_STEPS.length - 1;
+              const isLast = i === orderedSteps.length - 1;
               return (
                 <li key={step.key} className="relative flex gap-4 pb-6 last:pb-0">
                   {!isLast && <span className={`absolute left-[15px] top-8 h-full w-0.5 ${styles.line}`} aria-hidden />}
