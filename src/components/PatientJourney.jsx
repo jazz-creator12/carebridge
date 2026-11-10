@@ -1,12 +1,23 @@
-import { useState } from "react";
-import { JOURNEY_STEPS, ACTION_LABELS } from "../data/patients.js";
-import { WORKFLOW_TONE, FHIR_ARCHITECTURE } from "../data/patients.js";
-import { RiskBadge, StatusPill, WorkflowPill, SignalStateBadge, FhirBadge, Avatar, Icon, SIGNAL_ICON, SIGNAL_TONE } from "./ui.jsx";
+import { useId, useState } from "react";
+import { JOURNEY_STEPS, ACTION_LABELS, WORKFLOW_TONE, FHIR_ARCHITECTURE } from "../data/patients.js";
+import { orderJourneySteps } from "../lib/journey.js";
+import {
+  RiskBadge,
+  StatusPill,
+  WorkflowPill,
+  SignalStateBadge,
+  FhirBadge,
+  Avatar,
+  Icon,
+  SIGNAL_ICON,
+  SIGNAL_TONE,
+} from "./ui.jsx";
 
-const STATE_STYLES = {
-  done: { ring: "bg-emerald-500 text-white", line: "bg-emerald-500", label: "text-slate-900", pill: "green", pillText: "Completed" },
-  blocked: { ring: "bg-red-500 text-white", line: "bg-slate-200", label: "text-slate-900", pill: "red", pillText: "Blocked" },
-  pending: { ring: "bg-slate-200 text-slate-400", line: "bg-slate-200", label: "text-slate-400", pill: "slate", pillText: "Pending" },
+// Journey step states: icon + word + color (never color alone).
+const STEP_STYLES = {
+  done: { ring: "bg-emerald-600 text-white", line: "bg-emerald-600", pill: "green", pillText: "Completed" },
+  blocked: { ring: "bg-red-600 text-white", line: "bg-slate-200", pill: "red", pillText: "Blocked" },
+  pending: { ring: "border-2 border-slate-300 bg-white text-slate-600", line: "bg-slate-200", pill: "slate", pillText: "Pending" },
 };
 
 function StepIcon({ state }) {
@@ -15,127 +26,167 @@ function StepIcon({ state }) {
   return <Icon.Clock className="h-4 w-4" />;
 }
 
+// ---- One concise status banner (replaces three separate banners) ----
+function StatusBanner({ patient, resolved }) {
+  let tone;
+  if (resolved) {
+    tone = {
+      box: "border-emerald-200 bg-emerald-50",
+      icon: <Icon.Check className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-700" />,
+      title: patient.workflowStatus === "Closed" ? "Referral closed" : "Referral back on track",
+      titleCls: "text-emerald-900",
+    };
+  } else if (patient.actionTaken) {
+    tone = {
+      box: "border-brand-200 bg-brand-50",
+      icon: <Icon.Clock className="mt-0.5 h-5 w-5 flex-shrink-0 text-brand-700" />,
+      title: `Action in progress · ${patient.workflowStatus}`,
+      titleCls: "text-brand-900",
+    };
+  } else if (patient.risk !== "Low") {
+    tone = {
+      box: "border-red-200 bg-red-50",
+      icon: <Icon.Alert className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-700" />,
+      title: `Referral at risk${patient.blockingSystem ? ` · primary signal: ${patient.blockingSystem}` : ""}`,
+      titleCls: "text-red-900",
+    };
+  } else {
+    return null;
+  }
+  return (
+    <div role="status" className={`flex items-start gap-3 rounded-xl border p-4 ${tone.box}`}>
+      {tone.icon}
+      <div>
+        <h2 className={`text-sm font-semibold ${tone.titleCls}`}>{tone.title}</h2>
+        <p className="mt-0.5 text-sm text-slate-800">{patient.summary}</p>
+      </div>
+    </div>
+  );
+}
+
 // ---- Connected Signals: shows the mock source systems feeding CareBridge ----
 function ConnectedSignals({ patient }) {
   const [showArch, setShowArch] = useState(false);
+  const archId = useId();
   const active = patient.signals.filter((s) => (s.state || "active") === "active");
   const resolved = patient.signals.filter((s) => s.state === "resolved");
   const historical = patient.signals.filter((s) => s.state === "historical");
 
+  const barByState = (sig) => {
+    if (sig.state === "resolved") return "border-l-emerald-600";
+    if (sig.state === "historical") return "border-l-slate-400";
+    return (SIGNAL_TONE[sig.tone] || SIGNAL_TONE.neutral).bar;
+  };
+
   const SignalCard = ({ sig }) => {
     const IconComp = SIGNAL_ICON[sig.system] || Icon.Doc;
     const tone = SIGNAL_TONE[sig.tone] || SIGNAL_TONE.neutral;
-    const dim = sig.state === "resolved" || sig.state === "historical";
     return (
-      <div className={`flex items-start gap-3 rounded-lg border ${tone.ring} bg-white p-3 ${dim ? "opacity-70" : ""}`}>
+      <li className={`flex items-start gap-3 rounded-lg border border-l-4 border-slate-200 bg-white p-3 ${barByState(sig)}`}>
         <span className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${tone.icon}`}>
           <IconComp className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-1.5">
-              <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${tone.dot}`} />
-              <span className={`text-sm font-medium ${dim ? "text-slate-500" : "text-slate-800"} ${sig.state === "historical" ? "line-through decoration-slate-300" : ""}`}>
-                {sig.text}
-              </span>
-            </div>
+            <p className="text-sm font-medium text-slate-900">{sig.text}</p>
             <SignalStateBadge state={sig.state || "active"} />
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
-              Source: {sig.source}
-            </span>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-xs text-slate-600">Source: {sig.source}</span>
             {sig.fhir && <FhirBadge resource={sig.fhir} />}
           </div>
         </div>
-      </div>
+      </li>
     );
   };
 
   const Group = ({ title, items }) =>
     items.length === 0 ? null : (
       <div>
-        <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{title}</div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <h3 className="label-caps mb-2">{title}</h3>
+        <ul className="grid gap-3 sm:grid-cols-2">
           {items.map((sig) => (
             <SignalCard key={sig.id} sig={sig} />
           ))}
-        </div>
+        </ul>
       </div>
     );
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
+    <section aria-labelledby="signals-heading" className="card p-5">
       <div className="mb-1 flex flex-wrap items-center gap-2">
-        <h2 className="text-base font-semibold text-slate-900">Connected signals</h2>
-        <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200">
+        <h2 id="signals-heading" className="text-base font-semibold text-slate-900">
+          Connected signals
+        </h2>
+        <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-800 ring-1 ring-inset ring-teal-200">
           FHIR-aligned simulated integration
         </span>
         <button
+          type="button"
+          aria-expanded={showArch}
+          aria-controls={archId}
           onClick={() => setShowArch((v) => !v)}
-          className="ml-auto inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-500 transition hover:bg-slate-50"
+          className="btn btn-secondary btn-sm ml-auto"
         >
-          <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-slate-300 text-[9px] font-bold">i</span>
           How CareBridge connects systems
+          <Icon.Chevron className={`h-4 w-4 transition-transform ${showArch ? "-rotate-90" : "rotate-90"}`} />
         </button>
       </div>
-      <p className="mb-4 text-xs text-slate-400">
-        CareBridge combines information that normally lives in separate, disconnected systems. Clinical signals are
-        aligned to standard FHIR resources; operational signals (geography, transportation) keep their own source.
-        Signals are kept as a timeline — active problems, items resolved, and historical context.
+      <p className="mb-4 text-sm text-slate-600">
+        CareBridge combines information that normally lives in separate systems. Clinical signals align to standard
+        FHIR resources; operational signals (geography, transportation) keep their own source. Signals are kept as a
+        timeline: active problems, items resolved, and historical context.
       </p>
 
-      {showArch && <ArchitectureExplainer />}
+      {showArch && <ArchitectureExplainer id={archId} />}
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         <Group title={`Active (${active.length})`} items={active} />
         <Group title={`Resolved (${resolved.length})`} items={resolved} />
         <Group title={`Historical (${historical.length})`} items={historical} />
       </div>
-    </div>
+    </section>
   );
 }
 
 // ---- Compact "How CareBridge connects systems" explainer ----
-function ArchitectureExplainer() {
+function ArchitectureExplainer({ id }) {
   return (
-    <div className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50/50 p-4">
-      <div className="mb-3 text-xs font-bold uppercase tracking-wide text-indigo-700">
-        How CareBridge connects systems
-      </div>
-      <div className="space-y-2">
+    <div id={id} className="mb-5 rounded-lg border border-teal-200 bg-teal-50/60 p-4">
+      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-teal-800">How CareBridge connects systems</h3>
+      <ul className="space-y-2">
         {FHIR_ARCHITECTURE.map((row) => (
-          <div key={row.system} className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-            <span className="font-medium text-slate-800">{row.system}</span>
-            <Icon.Chevron className="h-3 w-3 text-slate-400" />
+          <li key={row.system} className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+            <span className="font-medium text-slate-900">{row.system}</span>
+            <Icon.ArrowRight className="h-4 w-4 text-slate-500" />
             <FhirBadge resource={row.resource} />
-            <Icon.Chevron className="h-3 w-3 text-slate-400" />
-            <span className="font-semibold text-brand-700">CareBridge</span>
-          </div>
+            <Icon.ArrowRight className="h-4 w-4 text-slate-500" />
+            <span className="font-semibold text-brand-800">CareBridge</span>
+          </li>
         ))}
-        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-          <span className="font-medium text-slate-800">Access / Geography · Transportation · Patient Intake</span>
-          <Icon.Chevron className="h-3 w-3 text-slate-400" />
-          <span className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+        <li className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+          <span className="font-medium text-slate-900">Access / Geography · Transportation · Patient Intake</span>
+          <Icon.ArrowRight className="h-4 w-4 text-slate-500" />
+          <span className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs font-semibold text-slate-700">
             Operational signal
           </span>
-          <Icon.Chevron className="h-3 w-3 text-slate-400" />
-          <span className="font-semibold text-brand-700">CareBridge</span>
-        </div>
-      </div>
+          <Icon.ArrowRight className="h-4 w-4 text-slate-500" />
+          <span className="font-semibold text-brand-800">CareBridge</span>
+        </li>
+      </ul>
 
-      <div className="mt-3 border-t border-indigo-100 pt-3 text-xs text-slate-600">
-        <div className="font-semibold text-slate-800">CareBridge then:</div>
-        <ul className="mt-1 space-y-0.5">
-          <li>• detects cross-system referral exceptions</li>
-          <li>• recommends an administrative action</li>
-          <li>• a human approves consequential actions</li>
-          <li>• continues monitoring for new external signals</li>
+      <div className="mt-3 border-t border-teal-200 pt-3 text-sm text-slate-700">
+        <div className="font-semibold text-slate-900">CareBridge then:</div>
+        <ul className="mt-1 list-disc space-y-0.5 pl-5">
+          <li>detects cross-system referral exceptions</li>
+          <li>recommends an administrative action</li>
+          <li>a human approves consequential actions</li>
+          <li>continues monitoring for new external signals</li>
         </ul>
       </div>
 
-      <p className="mt-3 text-[11px] text-slate-400">
-        FHIR-aligned simulated integration for this prototype — not connected to Epic, not FHIR certified, and not a
+      <p className="mt-3 text-xs text-slate-600">
+        FHIR-aligned simulated integration for this prototype. Not connected to Epic, not FHIR certified, and not a
         live payer integration. Existing systems remain the systems of record; CareBridge coordinates across them.
       </p>
     </div>
@@ -145,36 +196,45 @@ function ArchitectureExplainer() {
 // ---- Why this risk level? (expandable, rule-based) ----
 function RiskExplainer({ patient }) {
   const [open, setOpen] = useState(false);
+  const panelId = useId();
   const isLow = patient.risk === "Low";
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-card">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-5 py-3.5"
-      >
-        <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <Icon.Alert className={`h-4 w-4 ${isLow ? "text-emerald-500" : "text-amber-500"}`} />
-          Why this risk level?
-        </span>
-        <Icon.Chevron className={`h-4 w-4 text-slate-400 transition-transform ${open ? "rotate-90" : ""}`} />
-      </button>
+    <section className="card">
+      <h2>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => setOpen((v) => !v)}
+          className="flex min-h-[48px] w-full items-center justify-between gap-2 rounded-xl px-5 py-3 text-left"
+        >
+          <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <Icon.Alert className={`h-4 w-4 ${isLow ? "text-emerald-700" : "text-amber-700"}`} />
+            Why this risk level?
+          </span>
+          <Icon.Chevron className={`h-4 w-4 text-slate-600 transition-transform ${open ? "-rotate-90" : "rotate-90"}`} />
+        </button>
+      </h2>
       {open && (
-        <div className="border-t border-slate-100 px-5 py-4">
-          <div className="mb-2 flex items-center gap-2">
+        <div id={panelId} className="border-t border-slate-200 px-5 py-4">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
             <RiskBadge level={patient.risk} />
-            <span className="text-xs text-slate-400">Based on transparent operational rules — not a clinical prediction.</span>
+            <span className="text-xs text-slate-600">Transparent operational rules, not a clinical prediction.</span>
           </div>
           <ul className="space-y-1.5">
             {patient.riskReasons.map((r) => (
-              <li key={r} className="flex items-start gap-2 text-sm text-slate-700">
-                <span className={`mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full ${isLow ? "bg-emerald-400" : "bg-amber-400"}`} />
+              <li key={r} className="flex items-start gap-2 text-sm text-slate-800">
+                <span
+                  aria-hidden="true"
+                  className={`mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full ${isLow ? "bg-emerald-600" : "bg-amber-600"}`}
+                />
                 {r}
               </li>
             ))}
           </ul>
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -187,19 +247,19 @@ function ActionCenter({ patient, onRequestAction, onExternalEvent }) {
   // Fully resolved barrier (Sarah / David / Robert / Emily after loop closes).
   if (resolved) {
     return (
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
-        <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
-          <Icon.Check className="h-4 w-4" />
+      <section aria-labelledby="action-heading" className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+        <h2 id="action-heading" className="flex items-center gap-2 text-base font-semibold text-emerald-900">
+          <Icon.Check className="h-5 w-5" />
           {patient.loopClosed ? "Referral loop closed" : "Barrier resolved"}
-        </div>
-        <p className="mt-1 text-sm text-emerald-700">{patient.lastAction}</p>
+        </h2>
+        <p className="mt-2 text-sm text-slate-800">{patient.lastAction}</p>
         {!patient.loopClosed && (
-          <p className="mt-2 text-sm text-emerald-700">
+          <p className="mt-3 rounded-lg bg-white/70 p-3 text-sm font-medium text-slate-900">
             {patient.nextStepOverride ||
               "Next step: confirm the patient completes the visit, then ensure the specialist information returns to the PCP."}
           </p>
         )}
-      </div>
+      </section>
     );
   }
 
@@ -207,85 +267,96 @@ function ActionCenter({ patient, onRequestAction, onExternalEvent }) {
   if (actionTaken) {
     const awaitingNote = patient.awaitingExternal === "specialist_note";
     return (
-      <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
-        <div className="flex items-center gap-2 text-sm font-semibold text-blue-800">
-          <Icon.Clock className="h-4 w-4" /> Action in progress — barrier still active
-        </div>
-        <p className="mt-1 text-sm text-blue-700">{patient.lastAction}</p>
-        <p className="mt-2 text-sm text-blue-700">
+      <section aria-labelledby="action-heading" className="rounded-xl border border-brand-200 bg-brand-50 p-5">
+        <h2 id="action-heading" className="flex items-center gap-2 text-base font-semibold text-brand-900">
+          <Icon.Clock className="h-5 w-5" />
+          Action in progress, barrier still active
+        </h2>
+        <p className="mt-2 text-sm text-slate-800">{patient.lastAction}</p>
+        <p className="mt-2 text-sm text-slate-700">
           Taking this action did not resolve the underlying problem. The barrier stays active until an external
           system responds.
         </p>
 
         {awaitingNote && (
-          <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-white p-3">
-            <div className="flex items-center gap-2">
-              <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+          <div className="mt-4 rounded-lg border border-dashed border-slate-400 bg-white p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded bg-slate-900 px-1.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
                 Demo control
               </span>
-              <span className="text-xs font-medium text-slate-500">Simulated external event · no approval needed</span>
+              <span className="text-xs font-medium text-slate-700">Simulated external event · no approval needed</span>
             </div>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-sm text-slate-700">
               Facts arriving from other systems are not human decisions. Trigger the incoming signal to see CareBridge
               observe it and update the workflow.
             </p>
             <button
+              type="button"
               onClick={() => onExternalEvent(patient.id, "specialist_note")}
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              className="btn btn-secondary mt-3 w-full"
             >
               <Icon.Doc className="h-4 w-4" />
               Simulate incoming specialist note
             </button>
           </div>
         )}
-      </div>
+      </section>
     );
   }
 
   if (!ac) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
-        <div className="text-sm font-semibold text-slate-900">Referral Action Center</div>
-        <p className="mt-1 text-sm text-slate-500">No intervention needed — this referral is on track.</p>
-      </div>
+      <section aria-labelledby="action-heading" className="card p-5">
+        <h2 id="action-heading" className="text-base font-semibold text-slate-900">
+          Referral Action Center
+        </h2>
+        <p className="mt-1 flex items-center gap-2 text-sm text-slate-700">
+          <Icon.Check className="h-4 w-4 text-emerald-700" />
+          No intervention needed. This referral is on track.
+        </p>
+      </section>
     );
   }
 
-  const Row = ({ label, value, tone }) => (
-    <div>
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
-      <p className={`mt-0.5 text-sm ${tone || "text-slate-700"}`}>{value}</p>
-    </div>
-  );
-
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-500 text-white">
+    <section aria-labelledby="action-heading" className="card p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white">
           <Icon.Spark className="h-4 w-4" />
         </span>
-        <h2 className="text-base font-semibold text-slate-900">Referral Action Center</h2>
+        <h2 id="action-heading" className="text-base font-semibold text-slate-900">
+          Referral Action Center
+        </h2>
       </div>
-      <div className="space-y-3">
-        <Row label="Detected problem" value={ac.problem} tone="text-slate-900 font-medium" />
-        <Row label="Evidence" value={ac.evidence} />
-        <Row label="Recommended action" value={ac.action} tone="text-brand-700 font-medium" />
-        <Row label="Expected workflow effect" value={ac.effect} />
-      </div>
+      <dl className="space-y-3">
+        <div>
+          <dt className="label-caps">Detected problem</dt>
+          <dd className="mt-0.5 text-sm font-medium text-slate-900">{ac.problem}</dd>
+        </div>
+        <div>
+          <dt className="label-caps">Evidence</dt>
+          <dd className="mt-0.5 text-sm text-slate-800">{ac.evidence}</dd>
+        </div>
+        <div className="rounded-lg bg-brand-50 p-3">
+          <dt className="text-xs font-semibold uppercase tracking-wide text-brand-800">Recommended action</dt>
+          <dd className="mt-0.5 text-sm font-semibold text-brand-900">{ac.action}</dd>
+        </div>
+        <div>
+          <dt className="label-caps">Expected workflow effect</dt>
+          <dd className="mt-0.5 text-sm text-slate-800">{ac.effect}</dd>
+        </div>
+      </dl>
 
-      <div className="mt-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-        <Icon.Alert className="h-4 w-4 flex-shrink-0 text-amber-600" />
-        <span className="text-xs font-semibold text-amber-700">Human approval required to take this action</span>
-      </div>
+      <p className="mt-4 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+        <Icon.Alert className="mt-0.5 h-4 w-4 flex-shrink-0" />
+        Human approval required to take this action
+      </p>
 
-      <button
-        onClick={() => onRequestAction(patient)}
-        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600"
-      >
+      <button type="button" onClick={() => onRequestAction(patient)} className="btn btn-primary btn-lg mt-3 w-full">
         <Icon.Spark className="h-4 w-4" />
         Review &amp; approve: {ACTION_LABELS[patient.recommendedAction]}
       </button>
-    </div>
+    </section>
   );
 }
 
@@ -296,13 +367,9 @@ export default function PatientJourney({ patient, onBack, onAskAI, onRequestActi
   const progress = Math.round((completed / JOURNEY_STEPS.length) * 100);
   const resolved = patient.barrierResolved === true;
 
-  // DISPLAY-ONLY ordering for the vertical journey: show Completed (done) steps
-  // first in their canonical order, then the remaining (blocked/pending) steps in
-  // canonical order. This prevents a later Completed step from appearing below an
-  // earlier unresolved prerequisite. It reads patient.journey but never changes it.
-  const doneSteps = JOURNEY_STEPS.filter((s) => patient.journey[s.key] === "done");
-  const otherSteps = JOURNEY_STEPS.filter((s) => patient.journey[s.key] !== "done");
-  const orderedSteps = [...doneSteps, ...otherSteps];
+  // DISPLAY-ONLY ordering (see lib/journey.js): reads patient.journey, never changes it.
+  const orderedSteps = orderJourneySteps(patient.journey, JOURNEY_STEPS);
+  const currentIndex = orderedSteps.findIndex((s) => patient.journey[s.key] !== "done");
 
   // Contextual secondary actions. These never change referral state; we only hide
   // ones that are obviously irrelevant given the current state.
@@ -311,7 +378,8 @@ export default function PatientJourney({ patient, onBack, onAskAI, onRequestActi
   const transportIrrelevant = patient.journey.access_resolved === "done" || patient.telehealthAvailable;
   // "Contact patient" is done once the patient has been reached and confirmed.
   const patientAlreadyConfirmed =
-    patient.barrierResolved && patient.category === "ON_TRACK" &&
+    patient.barrierResolved &&
+    patient.category === "ON_TRACK" &&
     (patient.appointmentStatus || "").toLowerCase().includes("confirmed");
 
   let secondaryActions;
@@ -333,149 +401,80 @@ export default function PatientJourney({ patient, onBack, onAskAI, onRequestActi
   }
 
   return (
-    <div className="animate-fade-in space-y-6">
-      {/* Back + header */}
-      <button
-        onClick={onBack}
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-800"
-      >
+    <div className="animate-fade-in space-y-5">
+      <button type="button" onClick={onBack} className="btn btn-ghost btn-sm -ml-3">
         <Icon.Chevron className="h-4 w-4 rotate-180" />
         Back to dashboard
       </button>
 
-      <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-card sm:flex-row sm:items-center sm:justify-between">
+      {/* Header: who, risk, status, key facts */}
+      <header className="card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <Avatar name={patient.name} />
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-bold text-slate-900">{patient.name}</h1>
+              <h1 className="text-xl font-semibold tracking-tight text-slate-900">{patient.name}</h1>
               <RiskBadge level={patient.risk} />
               <WorkflowPill status={patient.workflowStatus} tone={WORKFLOW_TONE[patient.workflowStatus]} />
             </div>
-            <p className="mt-0.5 text-sm text-slate-500">
+            <p className="mt-0.5 text-sm text-slate-600">
               {patient.specialty} referral · placed {patient.referralDate} · PCP {patient.pcp}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-6 text-sm">
+        <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
           <div>
-            <div className="text-xs text-slate-400">Stalled</div>
-            <div className="font-medium text-slate-700">
+            <dt className="text-xs text-slate-600">Stalled</dt>
+            <dd className="font-semibold text-slate-900">
               {patient.stalledDays > 0 ? `${patient.stalledDays} days` : "Not stalled"}
-            </div>
+            </dd>
           </div>
           <div>
-            <div className="text-xs text-slate-400">Distance</div>
-            <div className="font-medium text-slate-700">
+            <dt className="text-xs text-slate-600">Distance</dt>
+            <dd className="font-semibold text-slate-900">
               {patient.distanceMiles === 0 ? "Telehealth" : `${patient.distanceMiles} miles`}
-            </div>
+            </dd>
           </div>
-        </div>
-      </div>
-
-      {/* At-risk / resolved banner */}
-      {/* Blocked / at risk — no action taken yet */}
-      {patient.risk !== "Low" && !resolved && !patient.actionTaken && (
-        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
-          <Icon.Alert className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
           <div>
-            <div className="font-semibold text-red-800">
-              Referral at risk{patient.blockingSystem ? ` · primary signal: ${patient.blockingSystem}` : ""}
-            </div>
-            <p className="mt-0.5 text-sm text-red-700">{patient.summary}</p>
+            <dt className="text-xs text-slate-600">Insurance</dt>
+            <dd className="font-semibold text-slate-900">{patient.insurance}</dd>
           </div>
-        </div>
-      )}
-      {/* Action taken but barrier still active (Maria / Emily step 1) */}
-      {!resolved && patient.actionTaken && (
-        <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
-          <Icon.Clock className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-500" />
-          <div>
-            <div className="font-semibold text-blue-800">
-              Action in progress · {patient.workflowStatus}
-            </div>
-            <p className="mt-0.5 text-sm text-blue-700">{patient.summary}</p>
-          </div>
-        </div>
-      )}
-      {/* Barrier fully resolved */}
-      {resolved && (
-        <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-          <Icon.Check className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-600" />
-          <div>
-            <div className="font-semibold text-emerald-800">
-              {patient.workflowStatus === "Closed" ? "Referral closed" : "Referral back on track"}
-            </div>
-            <p className="mt-0.5 text-sm text-emerald-700">{patient.summary}</p>
-          </div>
-        </div>
-      )}
+        </dl>
+      </header>
 
-      {/* Connected signals */}
-      <ConnectedSignals patient={patient} />
+      <StatusBanner patient={patient} resolved={resolved} />
 
-      {/* Risk explainer */}
-      <RiskExplainer patient={patient} />
-
-      <div className="grid gap-6 lg:grid-cols-5">
-        {/* Timeline */}
-        <div className="lg:col-span-3 rounded-xl border border-slate-200 bg-white p-6 shadow-card">
-          <div className="mb-5 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-slate-900">Referral journey</h2>
-            <span className="text-xs font-medium text-slate-400">{completed} of {JOURNEY_STEPS.length} complete</span>
-          </div>
-
-          <div className="mb-6 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-brand-500 to-emerald-500 transition-all"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-
-          <ol className="relative">
-            {orderedSteps.map((step, i) => {
-              const state = patient.journey[step.key] || "pending";
-              const styles = STATE_STYLES[state];
-              const isLast = i === orderedSteps.length - 1;
-              return (
-                <li key={step.key} className="relative flex gap-4 pb-6 last:pb-0">
-                  {!isLast && <span className={`absolute left-[15px] top-8 h-full w-0.5 ${styles.line}`} aria-hidden />}
-                  <span className={`z-10 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${styles.ring}`}>
-                    <StepIcon state={state} />
-                  </span>
-                  <div className="pt-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className={`font-medium ${styles.label}`}>{step.label}</span>
-                      <StatusPill tone={styles.pill}>{styles.pillText}</StatusPill>
-                    </div>
-                    <p className="mt-1 text-sm text-slate-500">{patient.timelineNotes[step.key]}</p>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        </div>
-
-        {/* Action center + secondary actions + AI shortcut */}
-        <div className="lg:col-span-2 space-y-4">
+      <div className="grid gap-5 lg:grid-cols-3">
+        {/* Action column comes first in the DOM (and on mobile); it sits on the right on desktop */}
+        <div className="space-y-4 lg:order-2 lg:col-span-1">
           <ActionCenter patient={patient} onRequestAction={onRequestAction} onExternalEvent={onExternalEvent} />
 
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
-            <h2 className="mb-1 text-sm font-semibold text-slate-900">Other coordinator actions</h2>
-            <p className="mb-3 text-xs text-slate-400">Simulated. These do not change referral state in the prototype.</p>
+          <RiskExplainer patient={patient} />
+
+          <section aria-labelledby="other-actions-heading" className="card p-5">
+            <h2 id="other-actions-heading" className="text-sm font-semibold text-slate-900">
+              Other coordinator actions
+            </h2>
+            <p className="mb-3 mt-1 text-xs text-slate-600">
+              Simulated. These do not change referral state in the prototype.
+            </p>
             <div className="flex flex-wrap gap-2">
               {secondaryActions.map((a) => (
-                <SecondaryAction
+                <button
                   key={a.label}
-                  icon={a.icon}
-                  label={a.label}
+                  type="button"
+                  className="btn btn-secondary btn-sm"
                   onClick={() => onSimulateToast(`${a.label} — simulated for ${patient.name}.`)}
-                />
+                >
+                  <a.icon className="h-4 w-4" />
+                  {a.label}
+                </button>
               ))}
             </div>
-          </div>
+          </section>
 
           <button
+            type="button"
             onClick={() =>
               onAskAI(
                 resolved
@@ -483,32 +482,79 @@ export default function PatientJourney({ patient, onBack, onAskAI, onRequestActi
                   : `What is blocking ${patient.name.split(" ")[0]}'s referral?`
               )
             }
-            className="flex w-full items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 p-4 text-left transition hover:bg-brand-100"
+            className="flex w-full items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 p-4 text-left transition-colors hover:bg-brand-100"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500 text-white">
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
               <Icon.Spark className="h-5 w-5" />
             </span>
-            <div>
-              <div className="text-sm font-semibold text-brand-700">Ask the AI Coordinator</div>
-              <div className="text-xs text-brand-600">
+            <span>
+              <span className="block text-sm font-semibold text-brand-900">Ask the AI Coordinator</span>
+              <span className="block text-xs text-brand-800">
                 {resolved ? "What's the next step for this referral?" : "Why is this referral at risk and what should I do?"}
-              </div>
-            </div>
+              </span>
+            </span>
           </button>
+        </div>
+
+        {/* Evidence column: journey timeline, then connected signals */}
+        <div className="space-y-5 lg:order-1 lg:col-span-2">
+          <section aria-labelledby="journey-heading" className="card p-5 sm:p-6">
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <h2 id="journey-heading" className="text-base font-semibold text-slate-900">
+                Referral journey
+              </h2>
+              <span className="text-sm font-medium text-slate-700">
+                {completed} of {JOURNEY_STEPS.length} complete
+              </span>
+            </div>
+
+            <div
+              role="progressbar"
+              aria-label="Referral journey progress"
+              aria-valuemin={0}
+              aria-valuemax={JOURNEY_STEPS.length}
+              aria-valuenow={completed}
+              aria-valuetext={`${completed} of ${JOURNEY_STEPS.length} steps complete`}
+              className="mb-6 h-2 w-full overflow-hidden rounded-full bg-slate-200"
+            >
+              <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: `${progress}%` }} />
+            </div>
+
+            <ol aria-label="Referral journey steps">
+              {orderedSteps.map((step, i) => {
+                const state = patient.journey[step.key] || "pending";
+                const styles = STEP_STYLES[state];
+                const isLast = i === orderedSteps.length - 1;
+                return (
+                  <li
+                    key={step.key}
+                    aria-current={i === currentIndex ? "step" : undefined}
+                    className="relative flex gap-4 pb-6 last:pb-0"
+                  >
+                    {!isLast && (
+                      <span aria-hidden="true" className={`absolute left-[15px] top-8 h-full w-0.5 ${styles.line}`} />
+                    )}
+                    <span
+                      className={`z-10 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${styles.ring}`}
+                    >
+                      <StepIcon state={state} />
+                    </span>
+                    <div className="pt-0.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-slate-900">{step.label}</span>
+                        <StatusPill tone={styles.pill}>{styles.pillText}</StatusPill>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-600">{patient.timelineNotes[step.key]}</p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+
+          <ConnectedSignals patient={patient} />
         </div>
       </div>
     </div>
-  );
-}
-
-function SecondaryAction({ icon: IconComp, label, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 active:scale-[0.98]"
-    >
-      <IconComp className="h-4 w-4" />
-      {label}
-    </button>
   );
 }
