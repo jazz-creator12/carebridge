@@ -39,18 +39,18 @@ function KpiCard({ label, value, sub, tone, icon: IconComp, onClick }) {
 
 function OutcomeRow({ icon: IconComp, label, hint, value, info }) {
   return (
-    <li className="flex items-center gap-3 py-3">
-      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-navy-50 text-navy-700">
+    <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-3 py-2.5">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-navy-50 text-navy-700">
         <IconComp className="h-4 w-4" />
       </span>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 leading-tight">
         <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
           {label}
           {info && <InfoTooltip title={info.title} body={info.body} note={info.note} label={`About ${label}`} />}
         </div>
-        <div className="text-xs text-slate-600">{hint}</div>
+        <div className="mt-0.5 text-xs text-slate-600">{hint}</div>
       </div>
-      <span className="font-display text-2xl font-bold tabular-nums text-navy-900">{value}</span>
+      <span className="min-w-[2.75rem] text-right font-display text-xl font-bold tabular-nums text-navy-900">{value}</span>
     </li>
   );
 }
@@ -68,11 +68,10 @@ export default function Dashboard({ patients, onSelectPatient, onOpenReferrals }
       <div>
         <p className="label-caps text-brand-700">Operations overview</p>
         <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-navy-900 sm:text-3xl">
-          These are the referrals that need human attention
+          Referral Command Center
         </h1>
-        <p className="mt-2 max-w-3xl text-sm text-slate-600 sm:text-base">
-          CareBridge watches each referral across disconnected systems and surfaces only the ones that have stalled
-          or broken, highest risk first.
+        <p className="mt-1.5 max-w-3xl text-sm text-slate-600 sm:text-base">
+          Monitor referrals, identify barriers, and coordinate the next action.
         </p>
       </div>
 
@@ -111,10 +110,10 @@ export default function Dashboard({ patients, onSelectPatient, onOpenReferrals }
         />
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         {/* Priority queue */}
-        <section aria-labelledby="priority-heading" className="card overflow-hidden xl:col-span-2">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-5 py-4">
+        <section aria-labelledby="priority-heading" className="card overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-5 py-3.5">
             <div>
               <h2 id="priority-heading" className="font-display text-lg font-bold text-navy-900">
                 Priority queue
@@ -144,40 +143,40 @@ export default function Dashboard({ patients, onSelectPatient, onOpenReferrals }
               {queue.map((p) => (
                 <li
                   key={p.id}
-                  className="relative py-4 pl-6 pr-5 transition-colors focus-within:bg-brand-50/50 hover:bg-slate-50"
+                  className="relative py-3 pl-6 pr-5 transition-colors focus-within:bg-brand-50/50 hover:bg-slate-50"
                 >
                   <span
                     aria-hidden="true"
                     className={`absolute inset-y-0 left-0 w-1.5 ${p.risk === "High" ? "bg-red-600" : "bg-amber-500"}`}
                   />
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
+                  {/* Row layout by width: 2 lines (md), 3 aligned columns (800px+), 2 lines while the
+                      outcomes panel is beside the queue (1280-1399px), 4 aligned columns (1536px+). */}
+                  <div className="grid gap-x-4 gap-y-1.5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center min-[800px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_16.5rem] xl:max-[1399px]:grid-cols-[minmax(0,1fr)_auto] min-[1536px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_13.5rem_18rem]">
+                    <div className="flex items-center gap-3 md:col-start-1 md:row-start-1 min-[800px]:row-span-2 xl:max-[1399px]:row-span-1 min-[1536px]:row-span-1">
                       <Avatar name={p.name} />
-                      <div>
+                      <div className="min-w-0">
                         {/* Stretched button: the whole row is one real, keyboard-focusable control */}
                         <button
                           type="button"
                           onClick={() => onSelectPatient(p.id)}
-                          className="rounded text-left font-semibold text-navy-900 after:absolute after:inset-0 after:content-['']"
+                          className="rounded text-left font-semibold leading-tight text-navy-900 after:absolute after:inset-0 after:content-['']"
                         >
                           {p.name}
                           <span className="sr-only">, open referral details</span>
                         </button>
-                        <div className="text-xs text-slate-600">
+                        <div className="text-xs leading-snug text-slate-600">
                           {p.specialty} · referred {p.referralDate}
                         </div>
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
+                    <div className="min-w-0 leading-snug md:col-start-1 md:row-start-2 min-[800px]:col-start-2 min-[800px]:row-span-2 min-[800px]:row-start-1 xl:max-[1399px]:col-start-1 xl:max-[1399px]:row-span-1 xl:max-[1399px]:row-start-2 min-[1536px]:col-start-2 min-[1536px]:row-span-1 min-[1536px]:row-start-1">
+                      <BarrierDetail p={p} />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 md:col-start-2 md:row-start-1 md:justify-self-end min-[800px]:col-start-3 xl:max-[1399px]:col-start-2 min-[1536px]:col-start-3 min-[1536px]:justify-self-start">
                       <RiskBadge level={p.risk} />
                       <WorkflowPill status={p.workflowStatus} tone={WORKFLOW_TONE[p.workflowStatus]} />
                     </div>
-                  </div>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2 sm:items-center sm:pl-[52px]">
-                    <div>
-                      <BarrierDetail p={p} />
-                    </div>
-                    <div className="sm:justify-self-end">
+                    <div className="md:col-start-2 md:row-start-2 md:justify-self-end min-[800px]:col-start-3 xl:max-[1399px]:col-start-2 min-[1536px]:col-start-4 min-[1536px]:row-start-1">
                       <NextAction p={p} />
                     </div>
                   </div>
@@ -188,15 +187,15 @@ export default function Dashboard({ patients, onSelectPatient, onOpenReferrals }
         </section>
 
         {/* Operational outcomes */}
-        <section aria-labelledby="impact-heading" className="card h-fit p-5">
-          <h2 id="impact-heading" className="font-display text-lg font-bold text-navy-900">
+        <section aria-labelledby="impact-heading" className="card h-fit px-5 py-4">
+          <h2 id="impact-heading" className="font-display text-base font-bold text-navy-900">
             Operational outcomes
           </h2>
-          <p className="mb-1 mt-1 text-sm text-slate-600">What CareBridge has resolved so far.</p>
-          <span className="inline-block rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+          <p className="mt-0.5 text-xs text-slate-600">What CareBridge has resolved so far.</p>
+          <span className="mt-2 inline-block rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
             Demo metrics based on fictional data
           </span>
-          <ul className="mt-2 divide-y divide-slate-100">
+          <ul className="mt-1 divide-y divide-slate-100">
             <OutcomeRow icon={Icon.Send} label="Actions taken" hint="Approved by a coordinator" value={m.actionsTaken} />
             <OutcomeRow icon={Icon.Shield} label="Barriers resolved" hint="Underlying problem cleared" value={m.barriersResolved} />
             <OutcomeRow icon={Icon.Activity} label="Returned on track" hint="Back to an active, on-track referral" value={m.returnedOnTrack} />

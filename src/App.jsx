@@ -213,7 +213,7 @@ export default function App() {
         id="main-content"
         ref={mainRef}
         tabIndex={-1}
-        className="mx-auto max-w-[1240px] px-4 py-6 focus:outline-none sm:px-6 sm:py-8 lg:px-8"
+        className="mx-auto max-w-[1560px] px-4 py-6 focus:outline-none sm:px-6 sm:py-8 lg:px-8 2xl:px-10"
       >
         {selected ? (
           <PatientJourney

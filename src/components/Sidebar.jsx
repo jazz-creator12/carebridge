@@ -128,23 +128,25 @@ export default function Sidebar({ view, attentionCount, drawerOpen, isDesktop, a
           </ul>
         </nav>
 
-        <div className="space-y-3 border-t border-white/10 p-4">
-          <div className="flex items-center gap-3">
-            <span
-              aria-hidden="true"
-              className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 font-display text-sm font-bold text-white"
-            >
-              RH
-            </span>
-            <div className="leading-tight">
-              <p className="text-sm font-semibold text-white">Rural Health Clinic</p>
-              <p className="text-xs text-navy-300">Coordinator view</p>
+        <div className="border-t border-white/10 p-3">
+          <div className="rounded-xl bg-white/5 p-3">
+            <div className="flex items-center gap-3">
+              <span
+                aria-hidden="true"
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand-600 font-display text-sm font-bold text-white"
+              >
+                RH
+              </span>
+              <div className="min-w-0 leading-tight">
+                <p className="truncate text-sm font-semibold text-white">Rural Health Clinic</p>
+                <p className="mt-0.5 text-xs text-navy-300">Coordinator view</p>
+              </div>
             </div>
+            <p className="mt-3 flex items-start gap-2 border-t border-white/10 pt-3 text-xs leading-snug text-navy-200">
+              <Icon.Shield className="mt-px h-4 w-4 flex-shrink-0 text-brand-300" />
+              Simulated demo. All patient data is fictional.
+            </p>
           </div>
-          <p className="flex items-start gap-2 rounded-lg bg-white/5 px-3 py-2 text-xs text-navy-200">
-            <Icon.Shield className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand-300" />
-            Simulated demo. All patient data is fictional.
-          </p>
         </div>
       </aside>
     </>
