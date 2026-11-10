@@ -180,3 +180,24 @@ test("suggested chips do not contradict Sarah's state", () => {
   assert.ok(!after.includes("Why is Sarah high risk?"));
   assert.ok(after.includes("Why is Sarah on track now?"));
 });
+
+test("filters: every card/chip bucket matches its dashboard count and relationships", async () => {
+  const { filterReferrals, STATUS_TAB_KEYS, CHIP_KEYS, DEFAULT_FILTER } = await import("../src/lib/filters.js");
+  const ps = fresh();
+  const m = computeMetrics(ps);
+  assert.equal(DEFAULT_FILTER, "ALL");
+  assert.equal(filterReferrals(ps, "EVERYTHING").length, m.activeReferrals);
+  assert.equal(filterReferrals(ps, "ALL").length, m.atRisk);
+  assert.equal(filterReferrals(ps, "URGENT").length, m.high);
+  assert.equal(filterReferrals(ps, "ON_TRACK").length, m.onTrack);
+  assert.deepEqual(STATUS_TAB_KEYS, ["EVERYTHING", "ALL", "URGENT", "ON_TRACK"]);
+  for (const key of CHIP_KEYS) assert.equal(filterReferrals(ps, key).length, 1, key);
+  // Highest risk first.
+  const order = filterReferrals(ps, "EVERYTHING").map((p) => p.risk);
+  assert.deepEqual(order, [...order].sort((a, b) => ({ High: 0, Medium: 1, Low: 2 }[a] - { High: 0, Medium: 1, Low: 2 }[b])));
+  // After the full session a Closed referral leaves Active and is never On track.
+  const done = fullSession();
+  assert.equal(filterReferrals(done, "EVERYTHING").length, 5);
+  assert.ok(!filterReferrals(done, "ON_TRACK").some((p) => p.id === "emily-johnson"));
+  assert.deepEqual(filterReferrals(done, "ALL").map((p) => p.id), ["maria-lopez"]);
+});

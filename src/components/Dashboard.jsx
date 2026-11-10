@@ -1,272 +1,164 @@
 import { useState } from "react";
 import { RiskBadge, WorkflowPill, InfoTooltip, Avatar, Icon } from "./ui.jsx";
-import { ACTION_LABELS, WORKFLOW_TONE } from "../data/patients.js";
+import { WORKFLOW_TONE } from "../data/patients.js";
 import { computeMetrics } from "../lib/metrics.js";
+import { RISK_ORDER } from "../lib/filters.js";
+import { NextAction, BarrierDetail } from "./referral-bits.jsx";
 import LiveFhirProof from "./LiveFhirProof.jsx";
 
-const RISK_ORDER = { High: 0, Medium: 1, Low: 2 };
-
-// Filter buckets. The four summary cards drive EVERYTHING / ALL / URGENT / ON_TRACK;
-// the barrier-type chips drive the category buckets. All share one `filter` state.
-const BUCKETS = [
-  { key: "EVERYTHING", label: "Active referrals", match: (p) => p.workflowStatus !== "Closed" },
-  { key: "ALL", label: "Needs attention now", match: (p) => p.risk !== "Low" },
-  { key: "URGENT", label: "Urgent", match: (p) => p.risk === "High" },
-  { key: "INSURANCE", label: "Blocked by insurance", match: (p) => p.category === "INSURANCE" },
-  { key: "ACCESS", label: "Blocked by access", match: (p) => p.category === "ACCESS" },
-  { key: "PATIENT", label: "Waiting on patient", match: (p) => p.category === "PATIENT" },
-  { key: "SPECIALIST", label: "Waiting on specialist", match: (p) => p.category === "SPECIALIST" },
-  { key: "CLOSED_LOOP", label: "Closed-loop gap · missing specialist note", match: (p) => p.category === "CLOSED_LOOP" },
-  { key: "ON_TRACK", label: "On track", match: (p) => p.workflowStatus === "On track" },
-];
-
-const CHIP_KEYS = ["INSURANCE", "ACCESS", "PATIENT", "SPECIALIST", "CLOSED_LOOP"];
-const CHIP_BUCKETS = BUCKETS.filter((b) => CHIP_KEYS.includes(b.key));
-
-// Color language: Urgent = red, Needs attention = amber, On track = green, Active = brand blue.
-const CARD_TONES = {
-  blue: "bg-brand-50 text-brand-700",
-  amber: "bg-amber-50 text-amber-800",
-  red: "bg-red-50 text-red-700",
-  green: "bg-emerald-50 text-emerald-700",
+// KPI tone language: Active = brand, Needs attention = amber, Urgent = red, On track = green.
+const KPI_TONES = {
+  brand: { chip: "bg-brand-50 text-brand-700", bar: "bg-brand-500" },
+  amber: { chip: "bg-amber-50 text-amber-800", bar: "bg-amber-500" },
+  red: { chip: "bg-red-50 text-red-700", bar: "bg-red-600" },
+  green: { chip: "bg-emerald-50 text-emerald-700", bar: "bg-emerald-600" },
 };
 
-function SummaryCard({ label, value, sub, tone, icon: IconComp, selected, onClick }) {
+function KpiCard({ label, value, sub, tone, icon: IconComp, onClick }) {
+  const t = KPI_TONES[tone];
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-pressed={selected}
-      className={`flex min-h-[112px] flex-col rounded-xl border p-4 text-left shadow-card transition-colors ${
-        selected
-          ? "border-brand-600 bg-brand-50/60 ring-1 ring-brand-600"
-          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-      }`}
+      className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 text-left shadow-card transition-all hover:border-slate-300 hover:shadow-cardhover motion-safe:hover:-translate-y-0.5"
     >
-      <span className="flex items-center gap-2">
-        <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${CARD_TONES[tone]}`}>
-          <IconComp className="h-4 w-4" />
+      <span className="flex items-start justify-between">
+        <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${t.chip}`}>
+          <IconComp className="h-5 w-5" />
         </span>
-        <span className="text-sm font-semibold text-slate-800">{label}</span>
-        {selected && <Icon.Check className="ml-auto h-4 w-4 text-brand-700" />}
+        <Icon.ArrowRight className="h-4 w-4 text-slate-400 transition-all group-hover:text-brand-700 motion-safe:group-hover:translate-x-0.5" />
       </span>
-      <span className="mt-3 text-3xl font-semibold tabular-nums tracking-tight text-slate-900">{value}</span>
-      <span className="mt-0.5 text-xs text-slate-600">{sub}</span>
+      <span className="mt-4 font-display text-4xl font-bold leading-none tabular-nums tracking-tight text-navy-900">{value}</span>
+      <span className="mt-2 text-sm font-semibold text-slate-900">{label}</span>
+      <span className="text-xs text-slate-600">{sub}</span>
+      <span className="sr-only">. View in referrals.</span>
+      <span aria-hidden="true" className={`absolute inset-x-0 bottom-0 h-1 ${t.bar}`} />
     </button>
   );
 }
 
-// What the coordinator should do next, shown with an icon + text (never color alone).
-function NextAction({ p }) {
-  if (p.recommendedAction === "none") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-800">
-        <Icon.Check className="h-4 w-4 flex-shrink-0" />
-        No intervention needed
+function OutcomeRow({ icon: IconComp, label, hint, value, info }) {
+  return (
+    <li className="flex items-center gap-3 py-3">
+      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-navy-50 text-navy-700">
+        <IconComp className="h-4 w-4" />
       </span>
-    );
-  }
-  if (p.recommendedAction === "monitor_payer") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-900">
-        <Icon.Clock className="h-4 w-4 flex-shrink-0" />
-        {ACTION_LABELS[p.recommendedAction]}
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 text-sm font-semibold text-brand-800">
-      {ACTION_LABELS[p.recommendedAction]}
-      <Icon.ArrowRight className="h-4 w-4 flex-shrink-0" />
-    </span>
-  );
-}
-
-function BarrierDetail({ p }) {
-  const meta = [p.blockingSystem && `Primary signal: ${p.blockingSystem}`, p.stalledDays > 0 && `Stalled ${p.stalledDays} days`]
-    .filter(Boolean)
-    .join(" · ");
-  return (
-    <>
-      <div className="font-medium text-slate-900">{p.barrier}</div>
-      {meta && <div className="mt-0.5 text-xs text-slate-600">{meta}</div>}
-    </>
-  );
-}
-
-function Metric({ value, label, hint, info }) {
-  return (
-    <div>
-      <div className="text-2xl font-semibold tabular-nums tracking-tight text-slate-900">{value}</div>
-      <div className="mt-0.5 flex items-center gap-1.5 text-sm font-medium text-slate-800">
-        {label}
-        {info && <InfoTooltip title={info.title} body={info.body} note={info.note} label={`About ${label}`} />}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+          {label}
+          {info && <InfoTooltip title={info.title} body={info.body} note={info.note} label={`About ${label}`} />}
+        </div>
+        <div className="text-xs text-slate-600">{hint}</div>
       </div>
-      <div className="text-xs text-slate-600">{hint}</div>
-    </div>
+      <span className="font-display text-2xl font-bold tabular-nums text-navy-900">{value}</span>
+    </li>
   );
 }
 
-export default function Dashboard({ patients, onSelectPatient }) {
-  const [filter, setFilter] = useState("ALL");
+export default function Dashboard({ patients, onSelectPatient, onOpenReferrals }) {
+  const m = computeMetrics(patients);
 
-  const sorted = [...patients].sort((a, b) => RISK_ORDER[a.risk] - RISK_ORDER[b.risk]);
-  const activeBucket = BUCKETS.find((b) => b.key === filter) || BUCKETS[1];
-  const visible = sorted.filter(activeBucket.match);
-
-  const { high, atRisk, activeReferrals, onTrack, actionsTaken, barriersResolved, returnedOnTrack, loopsClosed, avgStalled } =
-    computeMetrics(patients);
-
-  const emptyState = (
-    <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
-      <Icon.Check className="h-6 w-6 text-slate-500" />
-      <p className="text-sm font-medium text-slate-800">No referrals in this view right now.</p>
-      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFilter("ALL")}>
-        Show referrals needing attention
-      </button>
-    </div>
-  );
+  // Priority queue: everything that still needs attention, highest risk (then longest stalled) first.
+  const queue = patients
+    .filter((p) => p.risk !== "Low")
+    .sort((a, b) => RISK_ORDER[a.risk] - RISK_ORDER[b.risk] || b.stalledDays - a.stalledDays);
 
   return (
-    <div className="animate-fade-in space-y-5">
+    <div className="animate-fade-in space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+        <p className="label-caps text-brand-700">Operations overview</p>
+        <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-navy-900 sm:text-3xl">
           These are the referrals that need human attention
         </h1>
-        <p className="mt-1 max-w-3xl text-sm text-slate-600">
-          CareBridge monitors each referral across disconnected systems and surfaces only the ones that have
-          stalled or broken, highest risk first.
+        <p className="mt-2 max-w-3xl text-sm text-slate-600 sm:text-base">
+          CareBridge watches each referral across disconnected systems and surfaces only the ones that have stalled
+          or broken, highest risk first.
         </p>
       </div>
 
-      <WhyCareBridge />
-
-      {/* Summary cards: click to filter the queue below */}
-      <section aria-label="Referral summary" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryCard
+      <section aria-label="Referral summary" className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-4">
+        <KpiCard
           label="Active referrals"
-          value={activeReferrals}
-          sub="Being monitored"
-          tone="blue"
+          value={m.activeReferrals}
+          sub="Being monitored across systems"
+          tone="brand"
           icon={Icon.Doc}
-          selected={filter === "EVERYTHING"}
-          onClick={() => setFilter("EVERYTHING")}
+          onClick={() => onOpenReferrals("EVERYTHING")}
         />
-        <SummaryCard
+        <KpiCard
           label="Needs attention"
-          value={atRisk}
+          value={m.atRisk}
           sub="Require coordinator action"
           tone="amber"
           icon={Icon.Clock}
-          selected={filter === "ALL"}
-          onClick={() => setFilter("ALL")}
+          onClick={() => onOpenReferrals("ALL")}
         />
-        <SummaryCard
+        <KpiCard
           label="Urgent"
-          value={high}
-          sub="Highest priority"
+          value={m.high}
+          sub="Highest priority, High risk"
           tone="red"
           icon={Icon.Alert}
-          selected={filter === "URGENT"}
-          onClick={() => setFilter("URGENT")}
+          onClick={() => onOpenReferrals("URGENT")}
         />
-        <SummaryCard
+        <KpiCard
           label="On track"
-          value={onTrack}
+          value={m.onTrack}
           sub="No action needed"
           tone="green"
           icon={Icon.Check}
-          selected={filter === "ON_TRACK"}
-          onClick={() => setFilter("ON_TRACK")}
+          onClick={() => onOpenReferrals("ON_TRACK")}
         />
       </section>
 
-      {/* Referral queue */}
-      <section aria-labelledby="queue-heading" className="card overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
-          <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="grid gap-6 xl:grid-cols-3">
+        {/* Priority queue */}
+        <section aria-labelledby="priority-heading" className="card overflow-hidden xl:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-5 py-4">
             <div>
-              <h2 id="queue-heading" className="text-base font-semibold text-slate-900">
-                Referral queue
+              <h2 id="priority-heading" className="font-display text-lg font-bold text-navy-900">
+                Priority queue
               </h2>
-              <p aria-live="polite" className="text-sm text-slate-600">
-                Showing {visible.length} {visible.length === 1 ? "referral" : "referrals"} · {activeBucket.label}
+              <p className="text-sm text-slate-600">
+                {queue.length === 0
+                  ? "Nothing needs attention right now."
+                  : `${queue.length} ${queue.length === 1 ? "referral needs" : "referrals need"} a coordinator, highest risk first.`}
               </p>
             </div>
-            {filter !== "ALL" && (
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFilter("ALL")}>
-                Reset filter
-              </button>
-            )}
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onOpenReferrals("ALL")}>
+              View all referrals
+              <Icon.ArrowRight className="h-4 w-4" />
+            </button>
           </div>
-          <div role="group" aria-label="Filter by barrier type" className="flex flex-wrap items-center gap-2">
-            <span className="label-caps mr-1">Barrier type</span>
-            {CHIP_BUCKETS.map((b) => {
-              const count = sorted.filter(b.match).length;
-              const active = b.key === filter;
-              return (
-                <button
-                  key={b.key}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setFilter(active ? "ALL" : b.key)}
-                  className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors ${
-                    active
-                      ? "border-brand-700 bg-brand-700 text-white"
-                      : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  {b.label}
-                  <span
-                    className={`rounded-full px-1.5 text-xs font-semibold tabular-nums ${
-                      active ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
-                    }`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
-        {/* Table: tablet and up */}
-        <div className="hidden overflow-x-auto md:block">
-          <table className="w-full min-w-[680px] text-left text-sm">
-            <caption className="sr-only">
-              Referrals, sorted with the highest risk first. Open a patient name to see the full referral record.
-            </caption>
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50">
-                <th scope="col" className="label-caps px-5 py-3">Patient</th>
-                <th scope="col" className="label-caps px-3 py-3">Risk &amp; status</th>
-                <th scope="col" className="label-caps px-3 py-3">Barrier</th>
-                <th scope="col" className="label-caps px-5 py-3">Next action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {visible.length === 0 && (
-                <tr>
-                  <td colSpan={4}>{emptyState}</td>
-                </tr>
-              )}
-              {visible.map((p) => (
-                <tr
+          {queue.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+                <Icon.Check className="h-6 w-6" />
+              </span>
+              <p className="text-sm font-semibold text-slate-900">All clear</p>
+              <p className="text-sm text-slate-600">Every active referral is on track or closed.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {queue.map((p) => (
+                <li
                   key={p.id}
-                  onClick={() => onSelectPatient(p.id)}
-                  className="cursor-pointer align-top transition-colors hover:bg-slate-50 focus-within:bg-brand-50/60"
+                  className="relative py-4 pl-6 pr-5 transition-colors focus-within:bg-brand-50/50 hover:bg-slate-50"
                 >
-                  <td className="px-5 py-4">
+                  <span
+                    aria-hidden="true"
+                    className={`absolute inset-y-0 left-0 w-1.5 ${p.risk === "High" ? "bg-red-600" : "bg-amber-500"}`}
+                  />
+                  <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <Avatar name={p.name} />
                       <div>
+                        {/* Stretched button: the whole row is one real, keyboard-focusable control */}
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectPatient(p.id);
-                          }}
-                          className="rounded text-left font-semibold text-slate-900 hover:text-brand-700 hover:underline"
+                          onClick={() => onSelectPatient(p.id)}
+                          className="rounded text-left font-semibold text-navy-900 after:absolute after:inset-0 after:content-['']"
                         >
                           {p.name}
                           <span className="sr-only">, open referral details</span>
@@ -276,91 +168,55 @@ export default function Dashboard({ patients, onSelectPatient }) {
                         </div>
                       </div>
                     </div>
-                  </td>
-                  <td className="px-3 py-4">
-                    <div className="flex flex-col items-start gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <RiskBadge level={p.risk} />
                       <WorkflowPill status={p.workflowStatus} tone={WORKFLOW_TONE[p.workflowStatus]} />
                     </div>
-                  </td>
-                  <td className="max-w-[18rem] px-3 py-4">
-                    <BarrierDetail p={p} />
-                  </td>
-                  <td className="px-5 py-4">
-                    <NextAction p={p} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Cards: mobile */}
-        <ul className="divide-y divide-slate-100 md:hidden">
-          {visible.length === 0 && <li>{emptyState}</li>}
-          {visible.map((p) => (
-            <li key={p.id} className="relative p-4 transition-colors focus-within:bg-brand-50/60 active:bg-slate-50">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <Avatar name={p.name} />
-                  <div>
-                    {/* Stretched button: the whole card is one real, keyboard-focusable control */}
-                    <button
-                      type="button"
-                      onClick={() => onSelectPatient(p.id)}
-                      className="rounded text-left font-semibold text-slate-900 after:absolute after:inset-0 after:content-['']"
-                    >
-                      {p.name}
-                      <span className="sr-only">, open referral details</span>
-                    </button>
-                    <div className="text-xs text-slate-600">
-                      {p.specialty} · referred {p.referralDate}
+                  </div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2 sm:items-center sm:pl-[52px]">
+                    <div>
+                      <BarrierDetail p={p} />
+                    </div>
+                    <div className="sm:justify-self-end">
+                      <NextAction p={p} />
                     </div>
                   </div>
-                </div>
-                <RiskBadge level={p.risk} />
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <WorkflowPill status={p.workflowStatus} tone={WORKFLOW_TONE[p.workflowStatus]} />
-              </div>
-              <div className="mt-2 text-sm">
-                <BarrierDetail p={p} />
-              </div>
-              <div className="mt-3">
-                <NextAction p={p} />
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
-      {/* What CareBridge has resolved: demo metrics */}
-      <section aria-labelledby="impact-heading" className="card p-4 sm:p-5">
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <h2 id="impact-heading" className="text-base font-semibold text-slate-900">
-            What CareBridge has resolved
+        {/* Operational outcomes */}
+        <section aria-labelledby="impact-heading" className="card h-fit p-5">
+          <h2 id="impact-heading" className="font-display text-lg font-bold text-navy-900">
+            Operational outcomes
           </h2>
-          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+          <p className="mb-1 mt-1 text-sm text-slate-600">What CareBridge has resolved so far.</p>
+          <span className="inline-block rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
             Demo metrics based on fictional data
           </span>
-        </div>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3 lg:grid-cols-5">
-          <Metric value={actionsTaken} label="Actions taken" hint="Approved by a coordinator" />
-          <Metric value={barriersResolved} label="Barriers resolved" hint="Underlying problem cleared" />
-          <Metric value={returnedOnTrack} label="Returned on track" hint="Back to an active, on-track referral" />
-          <Metric value={loopsClosed} label="Referral loops closed" hint="Specialist info back at the PCP" />
-          <Metric
-            value={`${avgStalled}d`}
-            label="Avg. time stalled"
-            hint="Across stalled referrals"
-            info={{
-              title: "Average time stalled",
-              body: "Average elapsed time since each at-risk referral stopped progressing at its expected next workflow step.",
-              note: "Demo metric based on fictional data.",
-            }}
-          />
-        </div>
-      </section>
+          <ul className="mt-2 divide-y divide-slate-100">
+            <OutcomeRow icon={Icon.Send} label="Actions taken" hint="Approved by a coordinator" value={m.actionsTaken} />
+            <OutcomeRow icon={Icon.Shield} label="Barriers resolved" hint="Underlying problem cleared" value={m.barriersResolved} />
+            <OutcomeRow icon={Icon.Activity} label="Returned on track" hint="Back to an active, on-track referral" value={m.returnedOnTrack} />
+            <OutcomeRow icon={Icon.Doc} label="Referral loops closed" hint="Specialist info back at the PCP" value={m.loopsClosed} />
+            <OutcomeRow
+              icon={Icon.Clock}
+              label="Avg. time stalled"
+              hint="Across stalled referrals"
+              value={`${m.avgStalled}d`}
+              info={{
+                title: "Average time stalled",
+                body: "Average elapsed time since each at-risk referral stopped progressing at its expected next workflow step.",
+                note: "Demo metric based on fictional data.",
+              }}
+            />
+          </ul>
+        </section>
+      </div>
+
+      <WhyCareBridge />
 
       {/* Live interoperability proof: isolated, reads a real FHIR sandbox. */}
       <LiveFhirProof />
@@ -368,7 +224,7 @@ export default function Dashboard({ patients, onSelectPatient }) {
   );
 }
 
-// Compact value proposition. Pure presentation: reads no patient state, changes nothing.
+// Compact value proposition, visually secondary. Pure presentation: reads no patient state.
 function WhyCareBridge() {
   const [open, setOpen] = useState(false);
   const without = [
@@ -393,11 +249,11 @@ function WhyCareBridge() {
   ];
 
   return (
-    <section aria-labelledby="why-heading" className="card px-4 py-3 sm:px-5">
+    <section aria-labelledby="why-heading" className="rounded-2xl border border-slate-200 bg-white/60 px-5 py-4">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="flex items-center gap-2">
           <Icon.Spark className="h-4 w-4 text-brand-700" />
-          <h2 id="why-heading" className="text-sm font-semibold text-slate-900">
+          <h2 id="why-heading" className="text-sm font-semibold text-navy-900">
             Why CareBridge?
           </h2>
         </div>
@@ -426,11 +282,11 @@ function WhyCareBridge() {
       </ul>
 
       {open && (
-        <div id="why-details" className="mt-3 space-y-3 border-t border-slate-200 pt-3">
+        <div id="why-details" className="mt-4 space-y-3 border-t border-slate-200 pt-4">
           <div className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <h3 className="label-caps mb-1.5">Without CareBridge</h3>
-              <ul className="space-y-1">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <h3 className="label-caps mb-2">Without CareBridge</h3>
+              <ul className="space-y-1.5">
                 {without.map((item) => (
                   <li key={item} className="flex items-start gap-2 text-sm text-slate-700">
                     <span aria-hidden="true" className="mt-2 h-1 w-1 flex-shrink-0 rounded-full bg-slate-500" />
@@ -439,9 +295,9 @@ function WhyCareBridge() {
                 ))}
               </ul>
             </div>
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-              <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-800">With CareBridge</h3>
-              <ul className="space-y-1">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-emerald-800">With CareBridge</h3>
+              <ul className="space-y-1.5">
                 {withCB.map((item) => (
                   <li key={item} className="flex items-start gap-2 text-sm text-emerald-900">
                     <Icon.Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-700" />
@@ -453,9 +309,9 @@ function WhyCareBridge() {
           </div>
           <dl className="grid gap-3 sm:grid-cols-3">
             {outcomes.map((o) => (
-              <div key={o.title} className="rounded-lg border border-slate-200 p-3">
-                <dt className="text-sm font-semibold text-slate-900">{o.title}</dt>
-                <dd className="mt-0.5 text-sm text-slate-700">{o.body}</dd>
+              <div key={o.title} className="rounded-xl border border-slate-200 bg-white p-4">
+                <dt className="text-sm font-semibold text-navy-900">{o.title}</dt>
+                <dd className="mt-1 text-sm text-slate-700">{o.body}</dd>
               </div>
             ))}
           </dl>

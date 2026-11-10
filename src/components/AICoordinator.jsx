@@ -100,7 +100,7 @@ export default function AICoordinator({ open, onClose, pendingQuestion, onConsum
   return (
     <>
       {/* Backdrop on small screens, where the panel covers the page */}
-      {open && <div aria-hidden="true" onClick={onClose} className="fixed inset-0 z-40 bg-slate-900/30 lg:hidden" />}
+      {open && <div aria-hidden="true" onClick={onClose} className="fixed inset-0 z-[55] bg-navy-950/50 lg:hidden" />}
 
       <aside
         id="ai-coordinator-panel"
@@ -113,24 +113,29 @@ export default function AICoordinator({ open, onClose, pendingQuestion, onConsum
         }}
         // Opening: visibility flips instantly (so focus() works on the first frame).
         // Closing: visibility waits for the slide-out to finish, then hides the panel.
-        className={`fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-2xl duration-300 ${
+        className={`fixed right-0 top-0 z-[60] flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-canvas shadow-pop duration-300 ${
           open
             ? "visible translate-x-0 transition-transform"
             : "invisible translate-x-full transition-[transform,visibility]"
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+        <div className="on-dark flex items-center justify-between gap-3 bg-navy-900 px-5 py-4 text-white">
           <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500 text-white">
               <Icon.Spark className="h-5 w-5" />
             </span>
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">AI Referral Coordinator</h2>
-              <p className="text-xs text-slate-600">Rule-based · reads live referral state · no medical advice</p>
+              <h2 className="font-display text-base font-bold leading-tight">AI Referral Coordinator</h2>
+              <p className="text-xs text-navy-200">Rule-based · reads live referral state · no medical advice</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close AI Coordinator" className="btn btn-ghost h-10 w-10 !min-h-0 !p-0">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close AI Coordinator"
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-navy-200 transition-colors hover:bg-white/10 hover:text-white"
+          >
             <Icon.Close className="h-5 w-5" />
           </button>
         </div>
@@ -143,26 +148,38 @@ export default function AICoordinator({ open, onClose, pendingQuestion, onConsum
           aria-relevant="additions"
           aria-label="Conversation"
           tabIndex={0}
-          className="thin-scroll flex-1 space-y-3 overflow-y-auto bg-slate-50 px-4 py-4"
+          className="thin-scroll flex-1 space-y-4 overflow-y-auto px-4 py-5"
         >
-          {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div
-                className={`max-w-[92%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                  m.role === "user"
-                    ? "rounded-br-sm bg-brand-600 text-white"
-                    : "rounded-bl-sm border border-slate-200 bg-white text-slate-800 shadow-card"
-                }`}
-              >
-                <span className="sr-only">{m.role === "user" ? "You: " : "Coordinator: "}</span>
-                <MessageBody text={m.text} />
+          {messages.map((m, i) =>
+            m.role === "user" ? (
+              <div key={i} className="flex justify-end">
+                <div className="max-w-[88%] rounded-2xl rounded-br-md bg-brand-600 px-4 py-2.5 text-sm leading-relaxed text-white shadow-sm">
+                  <span className="sr-only">You: </span>
+                  <MessageBody text={m.text} />
+                </div>
               </div>
-            </div>
-          ))}
+            ) : (
+              <div key={i} className="flex items-start gap-2.5">
+                <span
+                  aria-hidden="true"
+                  className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-navy-900 text-white"
+                >
+                  <Icon.Spark className="h-4 w-4" />
+                </span>
+                <div className="max-w-[88%] rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3 text-sm leading-relaxed text-slate-800 shadow-card">
+                  <span className="sr-only">Coordinator: </span>
+                  <MessageBody text={m.text} />
+                </div>
+              </div>
+            )
+          )}
           {typing && (
-            <div className="flex justify-start" role="status">
+            <div className="flex items-start gap-2.5" role="status">
               <span className="sr-only">CareBridge is preparing an answer</span>
-              <div aria-hidden="true" className="flex items-center gap-1 rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-4 py-3">
+              <span aria-hidden="true" className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-navy-900 text-white">
+                <Icon.Spark className="h-4 w-4" />
+              </span>
+              <div aria-hidden="true" className="flex items-center gap-1 rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3.5">
                 <Dot /> <Dot delay="150ms" /> <Dot delay="300ms" />
               </div>
             </div>
@@ -170,7 +187,7 @@ export default function AICoordinator({ open, onClose, pendingQuestion, onConsum
         </div>
 
         {/* Suggested questions */}
-        <div className="border-t border-slate-200 px-4 pt-3">
+        <div className="border-t border-slate-200 bg-white px-4 pt-3">
           <h3 className="label-caps mb-2">Suggested questions</h3>
           <div className="flex max-h-32 flex-wrap gap-2 overflow-y-auto pb-3">
             {getSuggestedQuestions(patients).map((q) => (
@@ -178,7 +195,7 @@ export default function AICoordinator({ open, onClose, pendingQuestion, onConsum
                 key={q}
                 type="button"
                 onClick={() => send(q)}
-                className="min-h-[36px] rounded-full border border-slate-300 bg-white px-3 py-1 text-left text-sm text-slate-800 transition-colors hover:border-brand-400 hover:bg-brand-50"
+                className="min-h-[36px] rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-left text-sm font-medium text-brand-900 transition-colors hover:border-brand-400 hover:bg-brand-100"
               >
                 {q}
               </button>
@@ -192,7 +209,7 @@ export default function AICoordinator({ open, onClose, pendingQuestion, onConsum
             e.preventDefault();
             send();
           }}
-          className="border-t border-slate-200 p-4"
+          className="border-t border-slate-200 bg-white p-4 pt-3"
         >
           <label htmlFor={inputId} className="sr-only">
             Ask the coordinator a question about a referral
@@ -205,12 +222,12 @@ export default function AICoordinator({ open, onClose, pendingQuestion, onConsum
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask about a referral…"
               autoComplete="off"
-              className="min-h-[44px] flex-1 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-500"
+              className="min-h-[46px] flex-1 rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:bg-white"
             />
             <button
               type="submit"
               aria-label="Send question"
-              className="btn btn-primary h-11 w-11 !min-h-0 !p-0"
+              className="btn btn-primary h-[46px] w-[46px] !min-h-0 !rounded-xl !p-0"
               disabled={!input.trim()}
             >
               <Icon.Send className="h-5 w-5" />

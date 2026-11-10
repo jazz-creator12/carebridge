@@ -86,6 +86,17 @@ export const Icon = {
   ),
   Shield: makeIcon(<path d="M12 3l7 3v5c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-3Z" />),
   Heart: makeIcon(<path d="M12 20s-7-4.3-9.2-9A4.6 4.6 0 0 1 12 6a4.6 4.6 0 0 1 9.2 5c-2.2 4.7-9.2 9-9.2 9Z" />),
+  Grid: makeIcon(
+    <>
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </>
+  ),
+  List: makeIcon(<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />),
+  Menu: makeIcon(<path d="M4 6h16M4 12h16M4 18h16" />),
+  Activity: makeIcon(<path d="M3 12h4l2-6 4 12 2-6h6" />),
 };
 
 // Map a source-system key to an icon for the Connected Signals view.
@@ -197,16 +208,17 @@ export function SignalStateBadge({ state }) {
   );
 }
 
-export function Avatar({ name }) {
+export function Avatar({ name, size = "md" }) {
   const initials = name
     .split(" ")
     .map((n) => n[0])
     .slice(0, 2)
     .join("");
+  const dims = size === "lg" ? "h-14 w-14 text-lg" : "h-10 w-10 text-sm";
   return (
     <div
       aria-hidden="true"
-      className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800"
+      className={`flex ${dims} flex-shrink-0 items-center justify-center rounded-full bg-navy-100 font-display font-bold text-navy-800`}
     >
       {initials}
     </div>

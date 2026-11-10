@@ -10,7 +10,7 @@
   }
 
   body {
-    @apply bg-slate-50 text-slate-800 antialiased;
+    @apply bg-canvas text-slate-800 antialiased;
   }
 
   h1,
@@ -23,12 +23,16 @@
   :focus-visible {
     @apply outline outline-2 outline-offset-2 outline-brand-700;
   }
+
+  /* On the navy surfaces the focus ring flips to white. */
+  .on-dark :focus-visible {
+    @apply outline-white;
+  }
 }
 
 @layer components {
-  /* Surfaces */
   .card {
-    @apply rounded-xl border border-slate-200 bg-white shadow-card;
+    @apply rounded-2xl border border-slate-200/80 bg-white shadow-card;
   }
 
   /* Buttons: 40px default height, 36px small, 44px large. */
@@ -39,10 +43,10 @@
     @apply min-h-[36px] px-3 py-1.5;
   }
   .btn-lg {
-    @apply min-h-[44px] px-5;
+    @apply min-h-[48px] px-5 text-base;
   }
   .btn-primary {
-    @apply bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800;
+    @apply bg-brand-600 text-white shadow-sm hover:bg-brand-700 active:bg-brand-800;
   }
   .btn-secondary {
     @apply border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 active:bg-slate-100;
@@ -53,7 +57,7 @@
 
   /* Small uppercase section label (12px minimum). */
   .label-caps {
-    @apply text-xs font-semibold uppercase tracking-wide text-slate-600;
+    @apply text-xs font-semibold uppercase tracking-wider text-slate-600;
   }
 }
 

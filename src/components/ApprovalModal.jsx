@@ -57,8 +57,8 @@ function ApprovalDialog({ patient, proposal, onApprove, onCancel }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div aria-hidden="true" className="absolute inset-0 bg-slate-900/50" onClick={onCancel} />
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+      <div aria-hidden="true" className="absolute inset-0 bg-navy-950/60" onClick={onCancel} />
 
       <div
         ref={panelRef}
@@ -68,33 +68,37 @@ function ApprovalDialog({ patient, proposal, onApprove, onCancel }) {
         aria-describedby={descId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="relative max-h-[90vh] w-full max-w-md animate-fade-in overflow-y-auto rounded-2xl bg-white shadow-2xl focus:outline-none"
+        className="relative max-h-[90vh] w-full max-w-md animate-fade-in overflow-y-auto rounded-2xl bg-white shadow-pop focus:outline-none"
       >
         {/* Human approval banner */}
-        <div className="flex items-center gap-2 rounded-t-2xl border-b border-amber-200 bg-amber-50 px-5 py-3">
-          <Icon.Alert className="h-4 w-4 text-amber-800" />
-          <span className="text-xs font-bold uppercase tracking-wide text-amber-900">Human approval required</span>
+        <div className="flex items-center gap-2 border-b border-amber-300 bg-amber-100 px-5 py-3">
+          <Icon.Alert className="h-4 w-4 text-amber-900" />
+          <span className="text-xs font-bold uppercase tracking-wider text-amber-900">Human approval required</span>
         </div>
 
-        <div className="p-5">
-          <div className="mb-1 flex items-center gap-1.5 text-sm font-medium text-brand-800">
-            <Icon.Spark className="h-4 w-4" />
-            CareBridge recommends
+        <div className="p-5 sm:p-6">
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
+              <Icon.Spark className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-sm font-medium text-brand-800">CareBridge recommends</p>
+              <h2 id={titleId} className="font-display text-xl font-bold text-navy-900">
+                {proposal.label}
+              </h2>
+              <p className="mt-0.5 text-sm text-slate-600">
+                for {patient.name} · {patient.specialty}
+              </p>
+            </div>
           </div>
-          <h2 id={titleId} className="text-lg font-semibold text-slate-900">
-            {proposal.label}
-          </h2>
-          <p className="mt-1 text-sm text-slate-600">
-            for {patient.name} · {patient.specialty}
-          </p>
 
-          <div id={descId} className="mt-4 rounded-lg bg-slate-50 p-3">
+          <div id={descId} className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className="label-caps">Reason</div>
-            <p className="mt-1 text-sm text-slate-800">{proposal.reason}</p>
+            <p className="mt-1 text-sm text-slate-900">{proposal.reason}</p>
           </div>
 
           {showAlternatives && (
-            <div id={altId} className="mt-3 rounded-lg border border-slate-200 p-3">
+            <div id={altId} className="mt-3 rounded-xl border border-slate-200 p-4">
               <div className="label-caps">Alternative options</div>
               <ul className="mt-2 space-y-1.5">
                 {proposal.alternatives.map((alt) => (
@@ -117,7 +121,7 @@ function ApprovalDialog({ patient, proposal, onApprove, onCancel }) {
 
           <div className="mt-5 flex flex-col gap-2">
             <button type="button" onClick={onApprove} className="btn btn-primary btn-lg w-full">
-              <Icon.Check className="h-4 w-4" />
+              <Icon.Check className="h-5 w-5" />
               Approve action
             </button>
             <div className="flex gap-2">
